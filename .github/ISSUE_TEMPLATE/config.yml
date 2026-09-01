@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题
+    url: https://github.com/mtcto/haolvshi-legal-skill/blob/main/SECURITY.md
+    about: 请不要公开提交漏洞、密钥或真实用户数据，请按安全政策私下报告。
+  - name: 安装与使用文档
+    url: https://github.com/mtcto/haolvshi-legal-skill#快速开始
+    about: 提交问题前请先查看 README 和安装说明。

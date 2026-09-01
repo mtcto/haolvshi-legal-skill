@@ -1,0 +1,137 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import { runCommand } from '../scripts/legal-skill.mjs';
+import { startQuestion } from '../scripts/question-workflow.mjs';
+
+const config = {
+  apiBase: 'https://example.test/api',
+  siteBase: 'https://legal.example.test',
+  siteRouteBase: '',
+  appId: 'app-test',
+  deviceType: 1,
+  auditTimeoutMs: 1000
+};
+
+class MemoryStore {
+  constructor() {
+    this.states = new Map();
+    this.serial = 0;
+  }
+
+  async identity() {
+    return { userId: 'user-test', machineId: 'machine-test' };
+  }
+
+  async create(initial) {
+    const state = { sessionId: `session-${++this.serial}`, ...structuredClone(initial) };
+    this.states.set(state.sessionId, state);
+    return state;
+  }
+
+  async save(state) {
+    this.states.set(state.sessionId, structuredClone(state));
+    return state;
+  }
+}
+
+function assertCurrentTaskOnly(result) {
+  assert.equal(result.evidencePolicy.mode, 'current_task_only');
+  assert.equal(result.evidencePolicy.globalMemoryAllowed, false);
+  assert.equal(result.evidencePolicy.memoryToolAllowed, false);
+  assert.equal(result.evidencePolicy.crossTaskMemoryAllowed, false);
+  assert.equal(result.evidencePolicy.otherConversationHistoryAllowed, false);
+  assert.equal(result.evidencePolicy.currentUserQueryMustNotBeExpandedWithMemory, true);
+  assert.equal(result.evidencePolicy.onMissingCurrentTaskEvidence, 'ask_user');
+  assert.ok(result.evidencePolicy.forbiddenSources.includes('other_tasks'));
+  assert.match(result.prompt, /禁止读取、搜索、引用或推断/);
+  assert.match(result.prompt, /全局记忆/);
+}
+
+test('五类能力的命令输出统一携带当前任务证据边界', async () => {
+  const api = {
+    async get(requestPath, options = {}) {
+      if (requestPath.startsWith('/app/projects/')) {
+        return [{
+          appOnlineId: `question-${options.query.m}`,
+          projectId: `project-${options.query.m}`,
+          onlineProjectName: options.query.m === 1 ? '交通事故赔偿' : '交通事故咨询'
+        }];
+      }
+      if (requestPath === '/indictment/list') {
+        return [{ id: `template-${options.query.type}`, title: options.query.type === 1 ? '民事起诉状' : '民事答辩状' }];
+      }
+      throw new Error(`未模拟接口：${requestPath}`);
+    }
+  };
+
+  for (const capability of ['consultation', 'calculator', 'complaint', 'defense']) {
+    const result = await runCommand('catalog', { capability, query: '当前任务的概括性问题' }, { api, config, store: {} });
+    assertCurrentTaskOnly(result);
+  }
+
+  const contract = await runCommand('contract-review', {}, { api, config, store: {} });
+  assertCurrentTaskOnly(contract);
+  assert.equal(contract.interaction.evidenceScope.mode, 'current_task_only');
+  assert.equal(contract.interaction.evidenceScope.globalMemoryAllowed, false);
+  assert.match(contract.prompt, /禁止从全局记忆/);
+});
+
+test('概括性交通事故问题不会由脚本注入旧案例参数', async () => {
+  const oldCaseMarkers = ['2024年11月20号', '云南省大理州', '住了30天', '住院费4万元', '月工资1500元'];
+  const store = new MemoryStore();
+  const api = {
+    async get(requestPath) {
+      if (requestPath.startsWith('/app/projects/')) {
+        return [{ appOnlineId: 'traffic-online', projectId: 'traffic-project', onlineProjectName: '交通事故赔偿' }];
+      }
+      if (requestPath === '/question/project/traffic-online') return { pvId: 'pv-traffic' };
+      if (requestPath === '/question/getRecordId/traffic-online') return 'record-traffic';
+      throw new Error(`未模拟接口：${requestPath}`);
+    },
+    async put(requestPath, body) {
+      assert.equal(requestPath, '/question/answer');
+      assert.equal(body.action, 1);
+      return {
+        status: 1,
+        node: [{
+          id: 'accidentRegion',
+          title: '事故发生地是哪里？',
+          component: '17',
+          config: { required: true }
+        }]
+      };
+    }
+  };
+
+  const query = '发生交通事故，可以获得多少赔偿？';
+  const result = await startQuestion({ api, config, store, input: { capability: 'calculator', query } });
+
+  assert.match(result.data.caseContext.text, /发生交通事故，可以获得多少赔偿/);
+  assert.equal(result.data.caseContext.scope, 'current_task_only');
+  for (const marker of oldCaseMarkers) {
+    assert.doesNotMatch(result.data.caseContext.text, new RegExp(marker));
+  }
+  assert.match(result.prompt, /禁止读取、搜索或使用 WorkBuddy\/宿主全局记忆/);
+  assert.equal(result.interaction.evidenceScope.crossTaskMemoryAllowed, false);
+  assert.equal(result.interaction.fields[0].key, 'accidentRegion');
+});
+
+test('五类能力文档都明确禁止跨任务记忆', async () => {
+  const skillDir = path.resolve(new URL('..', import.meta.url).pathname);
+  const files = [
+    'SKILL.md',
+    'references/interaction.md',
+    'references/consultation.md',
+    'references/calculator.md',
+    'references/contract-review.md',
+    'references/pleading.md'
+  ];
+  const contents = await Promise.all(files.map(file => fs.readFile(path.join(skillDir, file), 'utf8')));
+  for (const [index, content] of contents.entries()) {
+    assert.match(content, /全局记忆/, `${files[index]} 应明确禁止全局记忆`);
+    assert.match(content, /其他任务/, `${files[index]} 应明确禁止其他任务内容`);
+  }
+  assert.match(contents[0], /五类能力统一执行“当前任务证据边界”/);
+});
