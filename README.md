@@ -28,6 +28,16 @@
 
 当前技能包版本为 `1.7`。
 
+## 技能宣传片
+
+<p align="center">
+  <a href="https://qiniu.ns.laway.cn/promo.mp4">
+    <img src="https://skills.ai.lvpin100.com/haolvshi-legal-skill-promo.jpg" alt="观看好律狮法律技能包宣传片" width="720">
+  </a>
+</p>
+
+点击上方封面观看[好律狮法律技能包宣传片](https://qiniu.ns.laway.cn/promo.mp4)。
+
 ## 能力范围
 
 | 能力 | 适用场景 | 结果 |
