@@ -1,6 +1,28 @@
-# 好律狮法律技能包
+<p align="center">
+  <img src="_icon.png" alt="好律狮法律技能包图标" width="128" height="128">
+</p>
 
-面向 Agent Skills 的中文法律服务技能。用户可以用自然语言提出法律问题、上传案件材料或合同，技能会引导补充必要事实，并通过好律狮服务生成法律咨询报告、赔偿计算报告、合同审核报告或 Word 法律文书。
+<h1 align="center">好律狮法律技能包</h1>
+
+<p align="center">面向 AI Agent 的中文法律服务技能</p>
+
+<p align="center">
+  <a href="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml"><img src="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml/badge.svg?branch=main" alt="自动化测试"></a>
+  <a href="https://github.com/mtcto/haolvshi-legal-skill/blob/main/LICENSE"><img src="https://img.shields.io/badge/许可证-MIT-22c55e?style=flat-square" alt="MIT 许可证"></a>
+  <img src="https://img.shields.io/badge/版本-1.7-2563eb?style=flat-square" alt="版本 1.7">
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 20 或更高版本">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/AI%20Agent-%E6%8A%80%E8%83%BD-7c3aed?style=flat-square" alt="AI Agent 技能">
+  <img src="https://img.shields.io/badge/Agent%20Skills-%E6%B3%95%E5%BE%8B%E6%8A%80%E8%83%BD-7c3aed?style=flat-square" alt="Agent Skills 法律技能">
+  <img src="https://img.shields.io/badge/%E6%B3%95%E5%BE%8B%20AI-%E6%B3%95%E5%BE%8B%E6%9C%8D%E5%8A%A1-0f766e?style=flat-square" alt="法律 AI 法律服务">
+  <img src="https://img.shields.io/badge/%E5%90%88%E5%90%8C%E5%AE%A1%E6%A0%B8-%E6%99%BA%E8%83%BD%E5%AE%A1%E6%A0%B8-b45309?style=flat-square" alt="智能合同审核">
+  <img src="https://img.shields.io/badge/%E6%B3%95%E5%BE%8B%E6%96%87%E4%B9%A6-%E8%B5%B7%E8%AF%89%E7%8A%B6%2F%E7%AD%94%E8%BE%A9%E7%8A%B6-475569?style=flat-square" alt="法律文书生成">
+  <img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87%E6%B3%95%E5%BE%8B%E6%9C%8D%E5%8A%A1-%E5%BC%80%E6%BA%90-dc2626?style=flat-square" alt="中文法律服务开源">
+</p>
+
+用户可以用自然语言提出法律问题、上传案件材料或合同，技能会引导补充必要事实，并通过好律狮服务生成法律咨询报告、赔偿计算报告、合同审核报告或 Word 法律文书。
 
 本仓库只包含可公开分发的技能源码、运行脚本、编排规范、示例模板和测试。官网、宣传页面、宣传素材、服务器配置、构建产物和内部发布脚本均不在本仓库中。
 
