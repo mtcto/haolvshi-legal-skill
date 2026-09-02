@@ -45,8 +45,8 @@ function assertCurrentTaskOnly(result) {
   assert.equal(result.evidencePolicy.currentUserQueryMustNotBeExpandedWithMemory, true);
   assert.equal(result.evidencePolicy.onMissingCurrentTaskEvidence, 'ask_user');
   assert.ok(result.evidencePolicy.forbiddenSources.includes('other_tasks'));
-  assert.match(result.prompt, /禁止读取、搜索、引用或推断/);
-  assert.match(result.prompt, /全局记忆/);
+  assert.match(result.prompt, /仅以当前任务信息和同一 sessionId 作答/);
+  assert.match(result.prompt, /禁用全局记忆、其他任务和猜测/);
 }
 
 test('五类能力的命令输出统一携带当前任务证据边界', async () => {
@@ -75,7 +75,28 @@ test('五类能力的命令输出统一携带当前任务证据边界', async ()
   assertCurrentTaskOnly(contract);
   assert.equal(contract.interaction.evidenceScope.mode, 'current_task_only');
   assert.equal(contract.interaction.evidenceScope.globalMemoryAllowed, false);
-  assert.match(contract.prompt, /禁止从全局记忆/);
+  assert.match(contract.prompt, /禁用全局记忆、其他任务和猜测/);
+});
+
+test('默认命令交互移除重复视图，verbose 模式保留完整兼容载荷', async () => {
+  const store = {};
+  const api = {};
+  const compact = await runCommand('contract-review', {}, { api, config, store });
+  const verbose = await runCommand('contract-review', { verbose: true }, { api, config, store });
+
+  assert.ok(compact.interaction.native);
+  assert.ok(compact.interaction.optionManifest);
+  assert.ok(compact.interaction.textFallback);
+  assert.equal(compact.interaction.renderPlan, undefined);
+  assert.equal(compact.interaction.inputSchema, undefined);
+  assert.equal(compact.interaction.historyResolution, undefined);
+  assert.ok(verbose.interaction.renderPlan);
+  assert.ok(verbose.interaction.inputSchema);
+  assert.ok(verbose.interaction.historyResolution);
+  assert.ok(
+    JSON.stringify(compact.interaction).length < JSON.stringify(verbose.interaction).length * 0.7,
+    '默认交互应显著小于完整兼容载荷'
+  );
 });
 
 test('概括性交通事故问题不会由脚本注入旧案例参数', async () => {
@@ -113,7 +134,7 @@ test('概括性交通事故问题不会由脚本注入旧案例参数', async ()
   for (const marker of oldCaseMarkers) {
     assert.doesNotMatch(result.data.caseContext.text, new RegExp(marker));
   }
-  assert.match(result.prompt, /禁止读取、搜索或使用 WorkBuddy\/宿主全局记忆/);
+  assert.match(result.prompt, /不猜测、不解释、不重建选项/);
   assert.equal(result.interaction.evidenceScope.crossTaskMemoryAllowed, false);
   assert.equal(result.interaction.fields[0].key, 'accidentRegion');
 });
@@ -133,5 +154,7 @@ test('五类能力文档都明确禁止跨任务记忆', async () => {
     assert.match(content, /全局记忆/, `${files[index]} 应明确禁止全局记忆`);
     assert.match(content, /其他任务/, `${files[index]} 应明确禁止其他任务内容`);
   }
-  assert.match(contents[0], /五类能力统一执行“当前任务证据边界”/);
+  assert.match(contents[0], /默认快速路径/);
+  assert.match(contents[0], /默认不读取参考文档/);
+  assert.ok(contents[0].length < 4_500, '默认规则应保持短小，避免低能力模型重复加载长流程');
 });

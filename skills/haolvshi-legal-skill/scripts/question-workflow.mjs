@@ -33,9 +33,9 @@ const CAPABILITY_TYPE = {
   calculator: 1
 };
 
-const QUESTION_INTERACTION_PROMPT = '按最短问答流程处理当前 interaction.fields[0]：只从当前任务内用户消息、当前任务材料、当前 sessionId 已保存答案和当前任务更正中匹配答案；禁止读取、搜索或使用 WorkBuddy/宿主全局记忆、长期记忆、其他任务、其他线程、用户画像、旧案例、示例、评测、交接文档、测试记录或日志，禁止把这些内容混入 query、caseContext 或 answers。存在直接且唯一匹配时立即调用 question-reply；当前任务内没有匹配时直接调用 interaction.native.batches[0] 的原生选择组件，不要先解释。普通填空题已经由脚本组装为标准 single_select 并生成 2 至 4 个选项，宿主不得再次生成候选或改写题目。非必填空敏感字段已经跳过。sequence.totalRemaining 大于 1 时继续逐题收集，所有字段回答完成前不得把多填题提交到后端。';
+const QUESTION_INTERACTION_PROMPT = '只处理 interaction.fields[0]：当前任务有唯一答案就调用 question-reply；否则直接呈现 native.batches[0]，不猜测、不解释、不重建选项。脚本会处理格式、追加题和多填题。';
 
-const FOLLOW_UP_INTERACTION_PROMPT = '只从当前任务内用户消息、当前任务材料、当前 sessionId 已保存答案和当前任务更正中匹配当前追加题；禁止使用全局记忆、其他任务、其他线程、旧案例或示例。能唯一匹配时提交答案，当前任务内无答案时直接渲染 interaction.native.batches[0]。追加题中的多填字段仍一次只处理一题，全部完成后才把主答案和追加答案一起提交后端。';
+const FOLLOW_UP_INTERACTION_PROMPT = '只处理当前追加题：有唯一当前任务答案就提交，否则呈现 native.batches[0]；全部追加题完成前不要请求下一题。';
 
 function questionInteractionPrompt() {
   return QUESTION_INTERACTION_PROMPT;

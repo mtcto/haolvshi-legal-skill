@@ -240,8 +240,8 @@ test('法律咨询逐题收集并生成报告', async () => {
   assert.equal(started.interaction.evidenceScope.crossTaskMemoryAllowed, false);
   assert.equal(started.interaction.historyResolution.noMatchAction, 'present_question_to_user');
   assert.equal(started.interaction.answerPolicy.neverChooseUnknownAsDefault, true);
-  assert.match(started.prompt, /没有匹配时直接调用 interaction\.native\.batches\[0\]/);
-  assert.match(started.prompt, /不要先解释/);
+  assert.match(started.prompt, /否则直接呈现 native\.batches\[0\]/);
+  assert.match(started.prompt, /不猜测、不解释、不重建选项/);
   assert.deepEqual(started.interaction.choices.map(choice => choice.label), ['是', '否']);
   assert.match(started.interaction.textFallback, /1\. 是/);
   const replied = await replyQuestion({ api, config, store, input: { sessionId: started.sessionId, answers: { married: '是' } } });
@@ -390,8 +390,8 @@ test('多个填空字段在自动填写部分选择后按一题一题的候选�
   assert.deepEqual(partial.interaction.native.batches[0].input.questions[0].options.map(option => option.label), [
     '18岁', '30岁', '45岁', '60岁'
   ]);
-  assert.match(partial.prompt, /直接调用 interaction\.native\.batches\[0\]/);
-  assert.match(partial.prompt, /宿主不得再次生成候选/);
+  assert.match(partial.prompt, /否则直接呈现 native\.batches\[0\]/);
+  assert.match(partial.prompt, /不猜测、不解释、不重建选项/);
   assert.equal(answerCalls.length, 1, '部分自动填写时不应提前提交后端');
 });
 

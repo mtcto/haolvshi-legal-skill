@@ -1,4 +1,6 @@
-export const CURRENT_TASK_EVIDENCE_INSTRUCTION = '证据边界：本技能的五类能力只能使用当前任务/当前对话线程内的用户消息、用户在当前任务上传或粘贴的材料、当前 sessionId 已保存的答案，以及当前任务内较新的明确更正。禁止读取、搜索、引用或推断 WorkBuddy/宿主的全局记忆、长期记忆、用户画像、其他任务、其他线程、旧案例、旧报告、示例、评测、交接文档、测试记录或日志；也禁止把这些内容写入 query、content、caseContext、answers、patches、合同立场、项目或模板选择。当前任务信息不足时必须向用户提问。';
+// 这段文字会附在每一次命令输出上，因此只保留模型执行下一步所需的约束；
+// 完整、可机读的边界仍由 currentTaskEvidencePolicy 返回。
+export const CURRENT_TASK_EVIDENCE_INSTRUCTION = '仅以当前任务信息和同一 sessionId 作答；禁用全局记忆、其他任务和猜测，缺信息即询问用户。';
 
 const ALLOWED_SOURCES = [
   'current_task_user_messages',

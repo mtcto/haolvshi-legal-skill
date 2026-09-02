@@ -56,6 +56,51 @@ function normalizeCapability(input) {
   return { ...input, capability: CAPABILITY_ALIASES.get(String(value)) || value };
 }
 
+// 交互结构同时服务于多种宿主。默认命令行调用只需要保留执行下一步的
+// 唯一表示，避免低能力模型在每轮阅读 fields、choices、JSON Schema 和
+// renderPlan 等重复载荷。传入 {"verbose":true} 可取得完整兼容载荷。
+const COMPACT_INTERACTION_KEYS = [
+  'type',
+  'title',
+  'description',
+  'step',
+  'steps',
+  'fields',
+  'submitLabel',
+  'summary',
+  'view',
+  'presentation',
+  'caseContext',
+  'evidenceScope',
+  'native',
+  'suggestedChoices',
+  'optionManifest',
+  'textFallback',
+  'sequence',
+  'followUp'
+];
+
+function compactInteraction(interaction) {
+  if (!interaction || typeof interaction !== 'object') return interaction;
+  return Object.fromEntries(
+    COMPACT_INTERACTION_KEYS
+      .filter(key => interaction[key] !== undefined)
+      .map(key => [key, interaction[key]])
+  );
+}
+
+function compactResult(result, input) {
+  if (!result?.interaction || input.verbose === true) return result;
+  const interaction = compactInteraction(result.interaction);
+  const data = result.data && interaction.caseContext && result.data.caseContext
+    ? (() => {
+        const { caseContext, ...rest } = result.data;
+        return rest;
+      })()
+    : result.data;
+  return { ...result, interaction, ...(data ? { data } : {}) };
+}
+
 async function readInput(argv) {
   const fileIndex = argv.indexOf('--input');
   if (fileIndex >= 0) {
@@ -218,11 +263,11 @@ export async function runCommand(command, rawInput = {}, dependencies = {}) {
   }
   const result = await handler(context);
   if (!result || typeof result !== 'object') return result;
-  return {
+  return compactResult({
     ...result,
     prompt: prependCurrentTaskEvidenceInstruction(result.prompt),
     evidencePolicy: currentTaskEvidencePolicy(result.sessionId || input.sessionId || null)
-  };
+  }, input);
 }
 
 async function main() {
