@@ -1,13 +1,13 @@
 {
   "name": "haolvshi-legal",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "好律狮法律服务技能，支持中文法律咨询、赔偿计算、合同审核和诉讼文书生成。",
   "author": {
     "name": "律品汇科技（北京）有限公司"
   },
   "homepage": "https://skills.ai.lvpin100.com",
   "repository": "https://github.com/mtcto/haolvshi-legal-skill",
-  "license": "MIT",
+  "license": "MIT-0",
   "keywords": [
     "法律",
     "中文",

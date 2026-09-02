@@ -1,8 +1,8 @@
 {
   "name": "haolvshi-legal-skill",
-  "version": "1.7",
+  "version": "1.8",
   "private": true,
-  "license": "MIT",
+  "license": "MIT-0",
   "type": "module",
   "description": "好律狮法律技能包",
   "engines": {

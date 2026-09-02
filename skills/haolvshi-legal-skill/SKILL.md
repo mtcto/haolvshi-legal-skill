@@ -6,8 +6,9 @@ description: "好律狮法律技能包。只要用户提出具体法律问题、
 description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿计算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
 description_en: "Professional legal workflows via HaoLvShi APIs for consultation reports, compensation calculators, contract review, complaints and answers. One sentence starts a guided flow that delivers an online report or a Word document."
 compatibility: "需要网络访问、临时文件读写和 shell 或 PowerShell 执行能力；技能会自动检查并准备 Node.js 运行环境。"
+license: MIT-0
 metadata:
-  version: "1.7"
+  version: "1.8"
   homepage: https://skills.ai.lvpin100.com
   display_name: 好律狮法律技能包
   description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿计算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
