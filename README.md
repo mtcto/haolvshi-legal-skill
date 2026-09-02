@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="_icon.png" alt="好律狮法律技能包图标" width="128" height="128">
+  <img src="skills/haolvshi-legal-skill/_icon.png" alt="好律狮法律技能包图标" width="128" height="128">
 </p>
 
 <h1 align="center">好律狮法律技能包</h1>
@@ -54,10 +54,11 @@
 
 ### 作为 Agent Skill 使用
 
-本仓库根目录就是技能目录，包含 `SKILL.md`。将仓库目录导入支持 Agent Skills 的人工智能工具即可：
+技能目录位于 `skills/haolvshi-legal-skill/`，可将该目录导入支持 Agent Skills 的人工智能工具：
 
 ```bash
 git clone git@github.com:mtcto/haolvshi-legal-skill.git
+cd haolvshi-legal-skill/skills/haolvshi-legal-skill
 ```
 
 也可以从好律狮提供的压缩包安装：
@@ -142,17 +143,26 @@ printf '%s' '{"capability":"calculator","query":"交通事故赔偿","filePaths"
   | sh scripts/run.sh catalog
 ```
 
+## Claude Code 与 npx skills
+
+本仓库包含 Claude Code 插件清单，可使用以下命令校验并安装：
+
+```bash
+claude plugin validate .
+npx skills add mtcto/haolvshi-legal-skill --skill haolvshi-legal-skill
+```
+
 详细的工作流、字段匹配、附件处理和错误恢复规则见：
 
-- [`SKILL.md`](SKILL.md)：人工智能助手的编排规范
-- [`INSTALL.md`](INSTALL.md)：安装、验证、配置和卸载说明
-- [`references/consultation.md`](references/consultation.md)：法律咨询流程
-- [`references/calculator.md`](references/calculator.md)：法律计算流程
-- [`references/contract-review.md`](references/contract-review.md)：合同审核流程
-- [`references/pleading.md`](references/pleading.md)：起诉状和答辩状流程
-- [`references/case-materials.md`](references/case-materials.md)：案件材料处理规则
-- [`references/interaction.md`](references/interaction.md)：交互和字段处理规则
-- [`references/errors.md`](references/errors.md)：错误处理规则
+- [`SKILL.md`](skills/haolvshi-legal-skill/SKILL.md)：人工智能助手的编排规范
+- [`INSTALL.md`](skills/haolvshi-legal-skill/INSTALL.md)：安装、验证、配置和卸载说明
+- [`references/consultation.md`](skills/haolvshi-legal-skill/references/consultation.md)：法律咨询流程
+- [`references/calculator.md`](skills/haolvshi-legal-skill/references/calculator.md)：法律计算流程
+- [`references/contract-review.md`](skills/haolvshi-legal-skill/references/contract-review.md)：合同审核流程
+- [`references/pleading.md`](skills/haolvshi-legal-skill/references/pleading.md)：起诉状和答辩状流程
+- [`references/case-materials.md`](skills/haolvshi-legal-skill/references/case-materials.md)：案件材料处理规则
+- [`references/interaction.md`](skills/haolvshi-legal-skill/references/interaction.md)：交互和字段处理规则
+- [`references/errors.md`](skills/haolvshi-legal-skill/references/errors.md)：错误处理规则
 
 ## 任务边界与隐私
 
@@ -211,17 +221,17 @@ npm run health
 ## 项目结构
 
 ```text
-SKILL.md                 人工智能助手的技能编排规则
-INSTALL.md               安装、配置和验证说明
-scripts/legal-skill.mjs  命令分发入口
-scripts/*-workflow.mjs  各项能力的工作流
-scripts/case-materials.mjs
+skills/haolvshi-legal-skill/SKILL.md                 人工智能助手的技能编排规则
+skills/haolvshi-legal-skill/INSTALL.md               安装、配置和验证说明
+skills/haolvshi-legal-skill/scripts/legal-skill.mjs  命令分发入口
+skills/haolvshi-legal-skill/scripts/*-workflow.mjs  各项能力的工作流
+skills/haolvshi-legal-skill/scripts/case-materials.mjs
                          案件材料识别和上下文复用
-references/              面向编排的详细流程规范
-tests/                   自动化测试和测试夹具
-evals/                   技能评测用例
-assets/                  报告模板和技能图标
-agents/                  助手展示和默认提示配置
+skills/haolvshi-legal-skill/references/              面向编排的详细流程规范
+skills/haolvshi-legal-skill/tests/                   自动化测试和测试夹具
+skills/haolvshi-legal-skill/evals/                   技能评测用例
+skills/haolvshi-legal-skill/assets/                  报告模板和技能图标
+skills/haolvshi-legal-skill/agents/                  助手展示和默认提示配置
 ```
 
 ## 法律服务免责声明

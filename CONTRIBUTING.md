@@ -17,6 +17,7 @@
 ```bash
 git clone git@github.com:mtcto/haolvshi-legal-skill.git
 cd haolvshi-legal-skill
+cd skills/haolvshi-legal-skill
 npm install
 npm run check
 npm test

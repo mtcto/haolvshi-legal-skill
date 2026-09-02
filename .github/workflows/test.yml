@@ -20,5 +20,6 @@ jobs:
           node-version: 22
       - name: 运行语法检查和测试
         run: |
+          cd skills/haolvshi-legal-skill
           npm run check
           npm test
