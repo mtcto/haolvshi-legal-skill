@@ -111,7 +111,7 @@ test('概括性交通事故问题不会由脚本注入旧案例参数', async ()
       if (requestPath === '/question/getRecordId/traffic-online') return 'record-traffic';
       throw new Error(`未模拟接口：${requestPath}`);
     },
-    async put(requestPath, body) {
+    async post(requestPath, body) {
       assert.equal(requestPath, '/question/answer');
       assert.equal(body.action, 1);
       return {

@@ -11,10 +11,10 @@
 将以下数据传给 `catalog`：
 
 ```json
-{"capability":"calculator","query":"交通事故赔偿"}
+{"capability":"calculator","query":"养老保险待遇测算"}
 ```
 
-技能调用 `/app/projects/{appId}` 时固定传 `m=1`。目录和项目编号都以接口返回为准；结合 `parentName`、`name` 和 `displayName` 选择项目，不选择仅用于分组且没有 `projectId` 的父级节点。
+技能调用 `/app/projects/{appId}` 时固定传 `m=1`。计算器包括赔偿、费用以及社会保险待遇测算；养老保险相关请求应以用户原话查询目录，并从返回的企业职工养老保险、基础养老金、个人账户养老金、过渡性养老金或退休待遇等具体项目中选择。目录和项目编号都以接口返回为准；结合 `parentName`、`name` 和 `displayName` 选择项目，不选择仅用于分组且没有 `projectId` 的父级节点。
 
 ## 开始逐题计算
 

@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml"><img src="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml/badge.svg?branch=main" alt="自动化测试"></a>
   <a href="https://github.com/mtcto/haolvshi-legal-skill/blob/main/LICENSE"><img src="https://img.shields.io/badge/许可证-MIT--0-22c55e?style=flat-square" alt="MIT-0 许可证"></a>
-  <img src="https://img.shields.io/badge/版本-1.9-2563eb?style=flat-square" alt="版本 1.9">
+  <img src="https://img.shields.io/badge/版本-1.11-2563eb?style=flat-square" alt="版本 1.11">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 20 或更高版本">
 </p>
 
@@ -22,11 +22,11 @@
   <img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87%E6%B3%95%E5%BE%8B%E6%9C%8D%E5%8A%A1-%E5%BC%80%E6%BA%90-dc2626?style=flat-square" alt="中文法律服务开源">
 </p>
 
-用户可以用自然语言提出法律问题、上传案件材料或合同，技能会引导补充必要事实，并通过好律狮服务生成法律咨询报告、赔偿计算报告、合同审核报告或 Word 法律文书。
+用户可以用自然语言提出法律问题、上传案件材料或合同，技能会引导补充必要事实，并通过好律狮服务生成法律咨询报告、赔偿及社会保险待遇计算报告、合同审核报告或 Word 法律文书。
 
 本仓库只包含可公开分发的技能源码、运行脚本、编排规范、示例模板和测试。官网、宣传页面、宣传素材、服务器配置、构建产物和内部发布脚本均不在本仓库中。
 
-当前技能包版本为 `1.9`。
+当前技能包版本为 `1.11`。
 
 ## 技能宣传片
 
@@ -43,7 +43,7 @@
 | 能力 | 适用场景 | 结果 |
 | --- | --- | --- |
 | 法律咨询报告 | 离婚、劳动、交通事故、合同纠纷等法律问题 | 在线法律咨询报告 |
-| 法律计算器 | 交通事故、工伤、劳动争议等赔偿或费用估算 | 在线法律计算报告 |
+| 法律计算器 | 交通事故、工伤、劳动争议等赔偿或费用估算，以及养老保险、养老金和社会保险待遇测算 | 在线法律计算报告 |
 | 智能合同审核 | 上传合同并说明我方是甲方还是乙方 | 在线合同审核报告 |
 | 起诉状生成 | 根据案情和材料整理起诉请求、事实与理由 | Word 起诉状 |
 | 答辩状生成 | 根据对方请求、案情和我方意见整理答辩文书 | Word 答辩状 |
@@ -71,6 +71,7 @@ npx skills add https://skills.ai.lvpin100.com/skills/haolvshi-legal-skill/haolvs
 
 ```text
 发生交通事故，帮我计算一下可以获得多少赔偿。
+我想计算我的养老保险，退休后每月能领多少养老金？
 帮我审核这份劳动合同，我方是乙方。
 请根据我提供的事实生成一份离婚起诉状。
 ```

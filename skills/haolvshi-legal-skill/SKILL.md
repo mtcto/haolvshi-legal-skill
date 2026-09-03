@@ -2,17 +2,17 @@
 name: haolvshi-legal-skill
 display_name: 好律狮法律技能包
 display_name_en: HaoLvShi Legal Skill
-description: "好律狮法律技能包。只要用户提出具体法律问题、要求计算赔偿或费用、审核合同、生成起诉状或生成答辩状，就应使用本技能调用好律狮专业法律服务接口完成流程；典型表达包括“离婚财产如何分割”“帮我审核这份合同”“生成离婚起诉状”“帮我写答辩状”“交通事故能赔多少钱”。支持多轮问答、结构化表单、附件上传、多个当事人、在线报告查看和法律文书直接下载。"
-version: "1.9"
-description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿计算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
+description: "好律狮法律技能包。只要用户提出具体法律问题，或要求计算赔偿、费用、社会保险待遇或养老保险待遇（包括企业职工养老保险、基础养老金、个人账户养老金、过渡性养老金和退休待遇），审核合同、生成起诉状或生成答辩状，就应使用本技能调用好律狮专业法律服务接口完成流程；典型表达包括“离婚财产如何分割”“帮我算养老保险”“退休后每月能领多少养老金”“帮我审核这份合同”“生成离婚起诉状”。支持多轮问答、结构化表单、附件上传、多个当事人、在线报告查看和法律文书直接下载。"
+version: "1.11"
+description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
 description_en: "Professional legal workflows via HaoLvShi APIs for consultation reports, compensation calculators, contract review, complaints and answers. One sentence starts a guided flow that delivers an online report or a Word document."
 compatibility: "需要网络访问、临时文件读写和 shell 或 PowerShell 执行能力；技能会自动检查并准备 Node.js 运行环境。"
 license: MIT-0
 metadata:
-  version: "1.9"
+  version: "1.11"
   homepage: https://skills.ai.lvpin100.com
   display_name: 好律狮法律技能包
-  description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿计算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
+  description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
 ---
 
 # 好律狮法律技能包
@@ -84,7 +84,7 @@ printf '%s' '{"capability":"calculator","query":"交通事故赔偿"}' \
 
 ### 法律计算器
 
-调用 `catalog`（`capability: calculator`），选定返回的具体 `projectId` 后调用 `question-start`；`stage=ready_for_report` 时调用 `question-report`。目录和问答异常才读 `references/calculator.md`。
+用于赔偿、费用及社会保险待遇测算，包括企业职工养老保险、基础养老金、个人账户养老金、过渡性养老金和退休待遇。调用 `catalog`（`capability: calculator`），选定返回的具体 `projectId` 后调用 `question-start`；`stage=ready_for_report` 时调用 `question-report`。目录和问答异常才读 `references/calculator.md`。
 
 ### 智能合同审核
 

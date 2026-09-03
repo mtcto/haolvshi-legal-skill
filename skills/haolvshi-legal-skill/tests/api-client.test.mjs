@@ -23,11 +23,16 @@ test('服务结果失败时抛出结构化错误', () => {
 });
 
 test('原始字符串接口支持双层 JSON 解码', async () => {
+  let method;
   const client = new ApiClient(config, {
-    fetchImpl: async () => new Response(JSON.stringify(JSON.stringify({ status: 1, node: [] })))
+    fetchImpl: async (_url, options) => {
+      method = options.method;
+      return new Response(JSON.stringify(JSON.stringify({ status: 1, node: [] })));
+    }
   });
-  const result = await client.put('/question/answer', {}, { unwrap: false });
+  const result = await client.post('/question/answer', {}, { unwrap: false });
   assert.deepEqual(result, { status: 1, node: [] });
+  assert.equal(method, 'POST');
 });
 
 test('有副作用的请求遇到网络错误不会自动重试', async () => {

@@ -17,4 +17,6 @@ test('技能包发布元数据版本保持一致', async () => {
   assert.equal(skillHubMeta.version, packageJson.version);
   assert.match(skillMarkdown, new RegExp(`version: "${escapedVersion}"`));
   assert.match(rootReadme, new RegExp('当前技能包版本为 `' + escapedVersion + '`'));
+  assert.match(skillMarkdown, /养老保险待遇/);
+  assert.match(skillMarkdown, /社会保险待遇/);
 });

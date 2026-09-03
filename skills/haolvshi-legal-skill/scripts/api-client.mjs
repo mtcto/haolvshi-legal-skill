@@ -138,12 +138,7 @@ export class ApiClient {
     return this.request(pathname, { ...options, method: 'POST', body });
   }
 
-  put(pathname, body, options = {}) {
-    return this.request(pathname, { ...options, method: 'PUT', body });
-  }
-
   upload(pathname, formData, options = {}) {
     return this.request(pathname, { ...options, method: 'POST', formData });
   }
 }
-

@@ -270,7 +270,7 @@ function followUpResult(state, prompt) {
 
 async function submitQuestionAnswer({ api, config, store, state, answeredNodes }) {
   const identity = await store.identity();
-  const raw = await api.put('/question/answer', {
+  const raw = await api.post('/question/answer', {
     action: 2,
     id: state.recordId,
     answer: answeredNodes,
@@ -490,7 +490,7 @@ export async function startQuestion({ api, config, store, input }) {
     userId: identity.userId
   });
 
-  const raw = await api.put('/question/answer', {
+  const raw = await api.post('/question/answer', {
     action: 1,
     id: recordId,
     appId: config.appId,
@@ -609,7 +609,7 @@ export async function generateQuestionReport({ api, config, store, input }) {
     throw new SkillError('QUESTION_NOT_FINISHED', '当前问题尚未回答完毕');
   }
   const identity = await store.identity();
-  const reportResponse = parseMaybeJson(await api.put('/question/report', {
+  const reportResponse = parseMaybeJson(await api.post('/question/report', {
     id: state.recordId,
     appId: config.appId,
     deviceType: config.deviceType

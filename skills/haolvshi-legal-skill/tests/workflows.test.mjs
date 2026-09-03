@@ -89,7 +89,7 @@ test('启动时自动跳过非必填敏感字段并继续请求下一题', async
       if (path === '/question/getRecordId/sensitive-online') return 'record-sensitive';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -147,7 +147,7 @@ test('法律咨询和计算器把上传材料持续附加到每一道题的内�
         if (requestPath === `/question/getRecordId/${capability}-online`) return `${capability}-record`;
         throw new Error(`未模拟接口：${requestPath}`);
       },
-      async put(requestPath, body) {
+      async post(requestPath, body) {
         assert.equal(requestPath, '/question/answer');
         answerCount += 1;
         if (body.action === 1) {
@@ -218,19 +218,16 @@ test('法律咨询逐题收集并生成报告', async () => {
       if (path.startsWith('/question/getCasesAndLawArticles/')) return { laws: [{ title: '民法典' }], caseList: [] };
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
-      calls.push(['put', path, body]);
+    async post(path, body) {
+      calls.push(['post', path, body]);
       if (path === '/question/answer' && body.action === 1) {
         return { status: 1, node: [{ id: 'married', title: '是否登记结婚？', component: '1', config: { required: true }, children: [{ id: 'yes', title: '是' }, { id: 'no', title: '否' }] }] };
       }
       if (path === '/question/answer' && body.action === 2) return { status: 0 };
       if (path === '/question/report') return '<p>财产分割结论</p>';
+      if (path === '/question/saveReport') return true;
       throw new Error(`未模拟接口：${path}`);
     },
-    async post(path) {
-      calls.push(['post', path]);
-      return true;
-    }
   };
 
   const started = await startQuestion({ api, config, store, input: { capability: 'consultation', query: '离婚财产分割' } });
@@ -248,6 +245,11 @@ test('法律咨询逐题收集并生成报告', async () => {
   assert.equal(replied.stage, 'ready_for_report');
   const report = await generateQuestionReport({ api, config, store, input: { sessionId: started.sessionId } });
   assert.equal(report.stage, 'completed');
+  assert.deepEqual(report.warnings, []);
+  assert.deepEqual(
+    calls.filter(([method]) => method === 'post').map(([, path]) => path),
+    ['/question/answer', '/question/answer', '/question/report', '/question/saveReport']
+  );
   assert.match(report.data.summary, /财产分割结论/);
   assert.equal(report.data.reportUrl, 'https://legal.example.test/g/r/record-question?appId=app-test&device_type=1');
   assert.equal(report.data.reportLinkMarkdown, '[法律咨询报告](https://legal.example.test/g/r/record-question?appId=app-test&device_type=1)');
@@ -272,7 +274,7 @@ test('当前任务证据只覆盖部分字段时先保存已知答案并标记�
       if (path === '/question/getRecordId/partial-online') return 'record-partial';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -336,7 +338,7 @@ test('多个填空字段在自动填写部分选择后按一题一题的候选�
       if (path === '/question/getRecordId/injured-online') return 'record-injured';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -405,7 +407,7 @@ test('法律咨询选择带追加题的选项后先本地收集追加答案再�
       if (path === '/question/getRecordId/consult-online') return 'record-consult';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -480,7 +482,7 @@ test('追加题包含多个填空字段时逐题返回标准单选，全部答�
       if (path === '/question/getRecordId/calc-online') return 'record-calc';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -573,7 +575,7 @@ test('非必填追加题没有案情答案时必须询问且空值不会提交�
       if (path === '/question/getRecordId/consult-online') return 'record-consult';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(structuredClone(body));
       if (body.action === 1) {
@@ -646,7 +648,7 @@ test('计算器通过 answer 接口逐题作答并在追加题完成前不请求
       if (path === '/question/getRecordId/calc-online') return 'record-calc';
       throw new Error(`未模拟接口：${path}`);
     },
-    async put(path, body) {
+    async post(path, body) {
       assert.equal(path, '/question/answer');
       answerCalls.push(body);
       if (body.action === 1) {
