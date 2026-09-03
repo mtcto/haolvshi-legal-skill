@@ -156,5 +156,10 @@ test('五类能力文档都明确禁止跨任务记忆', async () => {
   }
   assert.match(contents[0], /默认快速路径/);
   assert.match(contents[0], /默认不读取参考文档/);
-  assert.ok(contents[0].length < 4_500, '默认规则应保持短小，避免低能力模型重复加载长流程');
+  // 这条预算限的是正文流程规则，不含 frontmatter：
+  // frontmatter 里的 description 是各平台要求的触发描述，长度由平台决定，
+  // 把它算进来会让每次新增触发词都挤占流程规则的空间。
+  const skillBody = contents[0].replace(/^---[\s\S]*?\n---\n/, '');
+  assert.ok(skillBody.length < 3_800, '默认流程规则应保持短小，避免低能力模型重复加载长流程');
+  assert.ok(contents[0].length < 5_200, 'SKILL.md 整体仍不应无限膨胀');
 });

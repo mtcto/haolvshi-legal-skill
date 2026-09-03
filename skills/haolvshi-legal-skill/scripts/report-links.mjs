@@ -89,11 +89,27 @@ function passiveLink(type, url, label, extra = {}) {
 }
 
 export function onlineReportLink(url, label = '在线报告') {
-  return passiveLink('online_report', url, label);
+  return passiveLink('online_report', url, label, {
+    autoOpen: true,
+    openBehavior: 'open_immediately'
+  });
 }
 
 export function downloadFileLink(url, label = '下载文件', format = 'docx') {
   return passiveLink('download', url, label, { format });
+}
+
+export function resultDelivery(link) {
+  return {
+    markdown: link.markdown,
+    url: link.url,
+    mustDisplayInFinalResponse: true,
+    autoOpen: Boolean(link.autoOpen),
+    openBehavior: link.openBehavior,
+    instruction: link.autoOpen
+      ? '报告已生成：当前用户可见回复必须原样包含 markdown；随后立即用宿主可用的浏览器或导航能力打开 url。若宿主没有该能力，仍须在同一轮回复中发送 markdown，不得等待用户再次索取链接。'
+      : '文书已生成：当前用户可见回复必须原样包含 markdown，不得等待用户再次索取链接。'
+  };
 }
 
 export function capabilityResultLink(capability, url) {

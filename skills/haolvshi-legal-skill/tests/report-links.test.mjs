@@ -8,6 +8,7 @@ import {
   questionReportUrl,
   RESULT_GROUNDING_POLICY,
   RESULT_LINK_LABELS,
+  resultDelivery,
   resultGroundingPolicy
 } from '../scripts/report-links.mjs';
 
@@ -63,7 +64,7 @@ test('默认在线报告站点使用新的技能域名', () => {
   );
 });
 
-test('五类结果链接使用对应名称、Markdown且禁止自动打开', () => {
+test('五类结果链接稳定交付，在线报告自动打开而文书保持下载链接', () => {
   const expected = {
     consultation: '法律咨询报告',
     calculator: '法律计算报告',
@@ -77,8 +78,13 @@ test('五类结果链接使用对应名称、Markdown且禁止自动打开', () 
     const link = capabilityResultLink(capability, `https://example.test/${capability}`);
     assert.equal(link.label, label);
     assert.equal(link.markdown, `[${label}](https://example.test/${capability})`);
-    assert.equal(link.autoOpen, false);
-    assert.equal(link.openBehavior, 'user_click_only');
+    assert.equal(link.autoOpen, !['complaint', 'defense'].includes(capability));
+    assert.equal(link.openBehavior, ['complaint', 'defense'].includes(capability) ? 'user_click_only' : 'open_immediately');
     assert.equal(link.type, ['complaint', 'defense'].includes(capability) ? 'download' : 'online_report');
+    const delivery = resultDelivery(link);
+    assert.equal(delivery.markdown, link.markdown);
+    assert.equal(delivery.url, link.url);
+    assert.equal(delivery.mustDisplayInFinalResponse, true);
+    assert.equal(delivery.autoOpen, link.autoOpen);
   }
 });

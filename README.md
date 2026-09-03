@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml"><img src="https://github.com/mtcto/haolvshi-legal-skill/actions/workflows/test.yml/badge.svg?branch=main" alt="自动化测试"></a>
   <a href="https://github.com/mtcto/haolvshi-legal-skill/blob/main/LICENSE"><img src="https://img.shields.io/badge/许可证-MIT--0-22c55e?style=flat-square" alt="MIT-0 许可证"></a>
-  <img src="https://img.shields.io/badge/版本-1.11-2563eb?style=flat-square" alt="版本 1.11">
+  <img src="https://img.shields.io/badge/版本-1.13-2563eb?style=flat-square" alt="版本 1.13">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 20 或更高版本">
 </p>
 
@@ -26,7 +26,7 @@
 
 本仓库只包含可公开分发的技能源码、运行脚本、编排规范、示例模板和测试。官网、宣传页面、宣传素材、服务器配置、构建产物和内部发布脚本均不在本仓库中。
 
-当前技能包版本为 `1.11`。
+当前技能包版本为 `1.13`。
 
 ## 技能宣传片
 

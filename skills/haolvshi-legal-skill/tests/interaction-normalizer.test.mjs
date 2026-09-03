@@ -131,32 +131,27 @@ test('混合字段页按字段拆分原生选择和文本输入，不把五字�
   assert.equal(interaction.fields[0].displayOnly, true);
   assert.equal(interaction.renderPlan.mode, 'sequential_units');
   assert.equal(interaction.renderPlan.nativeChoiceCoverageComplete, false, '被跳过的姓名不需要进入原生组件');
+  // 地区题按输入呈现并由 area-resolver 解析成地区 id，不再进入原生选择。
   assert.deepEqual(interaction.renderPlan.nativeChoiceFieldKeys, [
     'injuredPerson.gender',
-    'injuredPerson.age',
-    'injuredPerson.liveAt',
-    'injuredPerson.registeredAt'
+    'injuredPerson.age'
   ]);
   assert.equal(interaction.renderPlan.nativeQuestionBatches.length, 1);
   assert.deepEqual(interaction.renderPlan.nativeQuestionBatches[0].input.questions.map(item => item.question), [
-    '性别？', '年龄？', '实际居住地？', '户籍地？'
+    '性别？', '年龄？'
   ]);
   assert.deepEqual(interaction.renderPlan.units.map(item => item.mode), [
-    'skip', 'native_choice', 'native_choice', 'native_choice', 'native_choice'
+    'skip', 'native_choice', 'native_choice', 'input', 'input'
   ]);
   assert.equal(interaction.native.complete, false);
   assert.deepEqual(interaction.native.coveredFieldKeys, [
     'injuredPerson.gender',
-    'injuredPerson.age',
-    'injuredPerson.liveAt',
-    'injuredPerson.registeredAt'
+    'injuredPerson.age'
   ]);
   assert.equal(interaction.suggestedChoices.materializedBySkill, true);
   assert.equal(interaction.suggestedChoices.hostGenerationRequired, false);
   assert.deepEqual(interaction.suggestedChoices.fieldKeys, [
-    'injuredPerson.age',
-    'injuredPerson.liveAt',
-    'injuredPerson.registeredAt'
+    'injuredPerson.age'
   ]);
   assert.equal(interaction.fields[2].type, 'single_select');
   assert.equal(interaction.fields[2].originalType, 'number');
@@ -263,7 +258,11 @@ test('非必填敏感字段直接跳过，但居住地和户籍地仍保留', ()
 
   assert.deepEqual(interaction.fields.map(field => field.skipIfOptionalSensitive), [true, true, true, false, false]);
   assert.deepEqual(interaction.fields.map(field => field.responseRequired), [false, false, false, true, true]);
-  assert.deepEqual(interaction.renderPlan.units.map(unit => unit.mode), ['skip', 'skip', 'skip', 'native_choice', 'native_choice']);
+  // 地区题的取值是地区表 id，凭空造出的“经常居住地”之类不是地区，不能当选项，
+  // 因此没有案情地名时按输入题呈现，由 area-resolver 校验并回真实候选。
+  assert.deepEqual(interaction.renderPlan.units.map(unit => unit.mode), ['skip', 'skip', 'skip', 'input', 'input']);
+  assert.equal(interaction.fields[3].valueContract.submit, 'area_id');
+  assert.equal(interaction.fields[3].valueContract.areaLevel, 2);
   assert.equal(interaction.sensitiveFieldPolicy.repeatedGroupFieldsAreNeverAutoSkipped, true);
   assert.deepEqual(unansweredFields(interaction).map(field => field.key), ['liveAt', 'registeredAt']);
   assert.deepEqual(nextUnresolvedInteraction(interaction).fields.map(field => field.key), ['liveAt']);

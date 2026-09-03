@@ -117,4 +117,4 @@
 {"sessionId":"任务编号","confirmed":true}
 ```
 
-传给 `pleading-generate`，最后展示文书摘要并原样输出 `links[0].markdown`，起诉状固定显示为 `[起诉状（Word）](链接地址)`，答辩状固定显示为 `[答辩状（Word）](链接地址)`。最终摘要和法律依据只能来自已生成文书及文书内已经列出的法规、案例和其他依据；不得在生成后搜索、查询或补充文书外内容。不得自动打开、预览或导航；该链接使用后端 `/indictment/download/{recordId}.docx` 接口，由用户主动点击下载，不再提供 `/indictment/report/{recordId}` 在线文书页面。
+传给 `pleading-generate`，最后展示文书摘要并在同一轮原样输出 `data.delivery.markdown`，起诉状固定显示为 `[起诉状（Word）](链接地址)`，答辩状固定显示为 `[答辩状（Word）](链接地址)`。最终摘要和法律依据只能来自已生成文书及文书内已经列出的法规、案例和其他依据；不得在生成后搜索、查询或补充文书外内容。该链接必须在文书生成当轮出现，不得等用户再次索取。文书为下载链接，`data.delivery.autoOpen=false`，不自动打开、预览或导航；它使用后端 `/indictment/download/{recordId}.docx` 接口，由用户主动点击下载，不再提供 `/indictment/report/{recordId}` 在线文书页面。

@@ -53,7 +53,16 @@ class MemoryStore {
   }
 }
 
-test('项目目录分别携带 m=2 和 m=1，并结合父级名称精准排序', async () => {
+// 地区题的取值是地区表 id，工作流测试需要一份最小地区表。
+const AREA_FIXTURE = [
+  { id: 'area-yn', name: '云南省', parentId: null },
+  { id: 'area-km', name: '昆明市', parentId: 'area-yn' },
+  { id: 'area-wh', name: '五华区', parentId: 'area-km' },
+  { id: 'area-zj', name: '浙江省', parentId: null },
+  { id: 'area-hz', name: '杭州市', parentId: 'area-zj' }
+];
+
+test('项目目录分别携带 m=2 和 m=1，并完整保留可启动项目供大模型语义选择', async () => {
   const queries = [];
   const api = {
     async get(path, options) {
@@ -67,8 +76,8 @@ test('项目目录分别携带 m=2 和 m=1，并结合父级名称精准排序',
     }
   };
 
-  const consultations = await questionCatalog(api, config, 'consultation', '交通事故损害赔偿', 10);
-  const calculators = await questionCatalog(api, config, 'calculator', '交通事故损害赔偿', 10);
+  const consultations = await questionCatalog(api, config, 'consultation', '劳动争议损害赔偿', 10);
+  const calculators = await questionCatalog(api, config, 'calculator', '劳动争议损害赔偿', 10);
 
   assert.equal(queries[0].query.m, 2);
   assert.equal(queries[1].query.m, 1);
@@ -76,7 +85,43 @@ test('项目目录分别携带 m=2 和 m=1，并结合父级名称精准排序',
   assert.equal(consultations[0].parentName, '交通事故');
   assert.equal(consultations[0].displayName, '交通事故 > 损害赔偿');
   assert.equal(calculators[0].id, 'app-leaf-traffic');
+  assert.equal(consultations[1].parentName, '劳动争议');
   assert.ok(consultations.every(item => item.projectId));
+});
+
+test('多个咨询项目时不再按用户原话分词自动选择，而是交给大模型语义评分', async () => {
+  const store = new MemoryStore();
+  const api = {
+    async get(requestPath) {
+      if (requestPath.startsWith('/app/projects/')) {
+        return [
+          { appOnlineId: 'service-contract', projectId: 'service-project', onlineProjectName: '服务合同纠纷' },
+          { appOnlineId: 'rental-deposit', projectId: 'rental-project', onlineProjectName: '租金与押金纠纷' }
+        ];
+      }
+      throw new Error(`不应在未完成项目语义选择前访问：${requestPath}`);
+    },
+    async post() {
+      throw new Error('不应在未完成项目语义选择前提交问答');
+    }
+  };
+
+  const result = await startQuestion({
+    api,
+    config,
+    store,
+    input: {
+      capability: 'consultation',
+      query: '租约到期后中介迟迟不退押金，且没有拿到合同，我该怎么办'
+    }
+  });
+
+  assert.equal(result.stage, 'needs_model_selection');
+  assert.equal(result.interaction, null);
+  assert.equal(result.data.candidates.length, 2);
+  assert.equal(result.data.selection.mode, 'host_model_semantic_scoring');
+  assert.equal(result.data.selection.autoSelect.minimumConfidence, 0.85);
+  assert.match(result.prompt, /不得按关键词命中数量、分词结果或目录原始顺序选择/);
 });
 
 test('启动时自动跳过非必填敏感字段并继续请求下一题', async () => {
@@ -87,6 +132,7 @@ test('启动时自动跳过非必填敏感字段并继续请求下一题', async
       if (path.startsWith('/app/projects/')) return [{ appOnlineId: 'sensitive-online', projectId: 'sensitive-project', onlineProjectName: '交通事故咨询' }];
       if (path === '/question/project/sensitive-online') return { pvId: 'pv-sensitive' };
       if (path === '/question/getRecordId/sensitive-online') return 'record-sensitive';
+      if (path === '/area/getQuestionAllArea') return AREA_FIXTURE;
       throw new Error(`未模拟接口：${path}`);
     },
     async post(path, body) {
@@ -255,12 +301,14 @@ test('法律咨询逐题收集并生成报告', async () => {
   assert.equal(report.data.reportLinkMarkdown, '[法律咨询报告](https://legal.example.test/g/r/record-question?appId=app-test&device_type=1)');
   assert.equal(report.links[0].type, 'online_report');
   assert.equal(report.links[0].label, '法律咨询报告');
-  assert.equal(report.links[0].autoOpen, false);
+  assert.equal(report.links[0].autoOpen, true);
+  assert.equal(report.data.delivery.markdown, report.links[0].markdown);
+  assert.equal(report.data.delivery.autoOpen, true);
   assert.equal(report.resultPolicy.sourceOfTruth, 'generated_result_only');
   assert.equal(report.resultPolicy.externalSearchAllowed, false);
   assert.equal(report.resultPolicy.addAuthoritiesNotInResultAllowed, false);
   assert.match(report.prompt, /不得调用网页搜索、法律数据库检索、联网查询/);
-  assert.match(report.prompt, /禁止调用浏览器/);
+  assert.match(report.prompt, /立即使用宿主可用的浏览器或导航能力打开/);
   assert.equal(report.downloads, undefined);
 });
 
@@ -325,7 +373,8 @@ test('当前任务证据只覆盖部分字段时先保存已知答案并标记�
   assert.equal(completed.stage, 'ready_for_report');
   assert.equal(answerCalls.length, 2);
   assert.equal(answerCalls[1].answer[0].value, 'yes');
-  assert.equal(answerCalls[1].answer[1].value, '2026-08-01');
+  // 日期题提交给后端的是 unix 秒，不是日期字符串（前端 QDate 的取值契约）。
+  assert.equal(answerCalls[1].answer[1].value, String(Math.floor(new Date(2026, 7, 1).getTime() / 1000)));
 });
 
 test('多个填空字段在自动填写部分选择后按一题一题的候选选择计划返回', async () => {
@@ -761,11 +810,13 @@ test('合同审核以 audit 返回值为最终结果，正常流程不查询详�
   assert.equal(result.data.reportLinkMarkdown, '[合同审核报告](https://legal.example.test/contract_review/detail?id=pv-contract&appId=app-test&device_type=1)');
   assert.equal(result.links[0].type, 'online_report');
   assert.equal(result.links[0].label, '合同审核报告');
-  assert.equal(result.links[0].autoOpen, false);
+  assert.equal(result.links[0].autoOpen, true);
+  assert.equal(result.data.delivery.markdown, result.links[0].markdown);
+  assert.equal(result.data.delivery.autoOpen, true);
   assert.equal(result.resultPolicy.sourceOfTruth, 'generated_result_only');
   assert.equal(result.resultPolicy.externalLookupAllowed, false);
   assert.match(result.prompt, /不得调用网页搜索、法律数据库检索、联网查询/);
-  assert.match(result.prompt, /禁止调用浏览器/);
+  assert.match(result.prompt, /立即使用宿主可用的浏览器或导航能力打开/);
   assert.equal(result.downloads, undefined);
   assert.equal(calls.filter(([method]) => method === 'get').length, 0);
   assert.equal(calls.filter(([, path]) => path === '/contract/audit').length, 1);
@@ -979,6 +1030,8 @@ test('起诉状和答辩状返回点击即下载的 Word 文件链接', async ()
   assert.equal(result.links[0].markdown, '[起诉状（Word）](https://example.test/api/indictment/download/record-pleading.docx?appId=app-test&deviceType=1)');
   assert.equal(result.links[0].autoOpen, false);
   assert.equal(result.data.downloadLinkMarkdown, result.links[0].markdown);
+  assert.equal(result.data.delivery.markdown, result.links[0].markdown);
+  assert.equal(result.data.delivery.autoOpen, false);
   assert.equal(result.resultPolicy.sourceOfTruth, 'generated_result_only');
   assert.equal(result.resultPolicy.supplementalLegalResearchAllowed, false);
   assert.match(result.prompt, /不得调用网页搜索、法律数据库检索、联网查询/);
@@ -1001,4 +1054,5 @@ test('恢复已完成的答辩状任务时将旧在线地址替换为直接下�
   assert.equal(result.links[0].markdown, '[答辩状（Word）](https://example.test/api/indictment/download/record-defense.docx?appId=app-test&deviceType=1)');
   assert.equal(result.links[0].autoOpen, false);
   assert.equal(result.data.downloadLinkMarkdown, result.links[0].markdown);
+  assert.equal(result.data.delivery.markdown, result.links[0].markdown);
 });

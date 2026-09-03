@@ -3,6 +3,7 @@ import { SkillError } from './errors.mjs';
 import {
   capabilityResultLink,
   pleadingDownloadUrl,
+  resultDelivery,
   resultGroundingPolicy
 } from './report-links.mjs';
 import {
@@ -538,13 +539,14 @@ export async function generatePleading({ api, config, store, input }) {
     capability: state.capability,
     stage: 'completed',
     sessionId: state.sessionId,
-    prompt: `文书已经生成。最终摘要和法律依据只能忠实使用已生成文书及文书中已经列明的法规、案例和其他依据；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充文书中没有的内容。展示摘要后只输出 links[0].markdown（${state.links[0].markdown}）；禁止自动打开、预览或导航到文书地址。`,
+    prompt: `文书已经生成。最终摘要和法律依据只能忠实使用已生成文书及文书中已经列明的法规、案例和其他依据；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充文书中没有的内容。展示摘要后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），不得等待用户再次索取。`,
     data: {
       recordId,
       template: state.template,
       summary: pleadingSummary(state.params),
       downloadUrl: state.downloadUrl,
-      downloadLinkMarkdown: state.links[0].markdown
+      downloadLinkMarkdown: state.links[0].markdown,
+      delivery: resultDelivery(state.links[0])
     },
     resultPolicy,
     links: state.links
@@ -563,7 +565,7 @@ export function pleadingResume(state, config) {
     stage: state.stage,
     sessionId: state.sessionId,
     prompt: state.stage === 'completed'
-      ? `文书已经生成。最终摘要和法律依据只能依据已生成文书及其中已有法规、案例和其他依据，不得搜索、查询或补充外部内容；只输出 links[0].markdown（${downloadLink.markdown}），禁止自动打开、预览或导航到文书地址。`
+      ? `文书已经生成。最终摘要和法律依据只能依据已生成文书及其中已有法规、案例和其他依据，不得搜索、查询或补充外部内容；当前用户可见回复必须原样包含 data.delivery.markdown（${downloadLink.markdown}），不得等待用户再次索取。`
       : `任务已经恢复到“${STEP_NAMES[state.step || 0]}”。只可复用这个 sessionId 中的状态，并只依据当前任务内用户消息、当前任务材料、当前 sessionId 已有值和当前任务更正逐字段匹配；禁止使用全局记忆、其他任务、其他线程、旧案例、旧文书或示例。只有存在直接、明确、唯一的当前任务依据时才能自动填写；没有匹配的字段必须返回给用户，不得选择“不清楚”、其他兜底值或默认值代填。`,
     interaction: state.stage === 'completed' ? null : pleadingInteraction(state),
     data: {
@@ -571,7 +573,8 @@ export function pleadingResume(state, config) {
       recordId: state.recordId || null,
       summary: pleadingSummary(state.params || {}),
       downloadUrl,
-      downloadLinkMarkdown: downloadLink?.markdown || null
+      downloadLinkMarkdown: downloadLink?.markdown || null,
+      delivery: downloadLink ? resultDelivery(downloadLink) : null
     },
     resultPolicy,
     links: downloadLink ? [downloadLink] : []

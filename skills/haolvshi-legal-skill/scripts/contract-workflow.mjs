@@ -8,6 +8,7 @@ import { buildContractReportHtml } from './report-builder.mjs';
 import {
   capabilityResultLink,
   contractReportUrl,
+  resultDelivery,
   resultGroundingPolicy
 } from './report-links.mjs';
 import { withInteractionRendering } from './interaction-normalizer.mjs';
@@ -57,7 +58,7 @@ async function finalizeContract({ api, config, store, state, result, saveHtml = 
     capability: 'contract',
     stage: 'completed',
     sessionId: state.sessionId,
-    prompt: `合同审核已经完成。最终总结、风险结论、修改建议和法律依据只能忠实使用 data.riskPoints 及生成报告中已有内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。按风险等级展示重点风险和修改建议后，只输出 links[0].markdown（${state.links[0].markdown}）；禁止调用浏览器、网页打开、预览或导航工具，报告必须由用户点击链接后自行打开。`,
+    prompt: `合同审核已经完成。最终总结、风险结论、修改建议和法律依据只能忠实使用 data.riskPoints 及生成报告中已有内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。按风险等级展示重点风险和修改建议后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），并立即使用宿主可用的浏览器或导航能力打开 data.delivery.url；若宿主没有浏览器或导航能力，仍须在同一轮回复中发送该链接，不得等待用户再次索取。`,
     data: {
       pvId: state.pvId,
       recordId,
@@ -65,7 +66,8 @@ async function finalizeContract({ api, config, store, state, result, saveHtml = 
       summary: riskSummary(riskPoints),
       riskPoints,
       reportUrl: state.reportUrl,
-      reportLinkMarkdown: state.links[0].markdown
+      reportLinkMarkdown: state.links[0].markdown,
+      delivery: resultDelivery(state.links[0])
     },
     resultPolicy,
     links: state.links,

@@ -1,6 +1,13 @@
 import { SkillError } from './errors.mjs';
 import { currentTaskEvidencePolicy } from './evidence-policy.mjs';
 
+import {
+  coerceNodeValue,
+  formatDateForDisplay,
+  isMinuteDate,
+  isMonthOnlyDate
+} from './answer-coercion.mjs';
+
 const COMPONENT_TYPES = new Map([
   ['1', 'single_select'],
   ['2', 'multi_select'],
@@ -166,7 +173,44 @@ function normalizeSimpleNode(node, key) {
     help: plainText(node?.tips || node?.description || node?.remark || ''),
     readonly
   };
+  const contract = valueContract(node, type);
+  if (contract) field.valueContract = contract;
+  if (type === 'date' && field.value) field.displayValue = formatDateForDisplay(node, field.value);
   return field;
+}
+
+// 告诉宿主这道题的取值形状和填写粒度。脚本会自动完成转换，
+// 但宿主需要据此提问：年月题不要追问"日"，地区题要问到 areaLevel 指定的层级。
+function valueContract(node, type) {
+  const config = node?.config || {};
+  if (type === 'date') {
+    return {
+      submit: 'unix_seconds',
+      granularity: isMonthOnlyDate(node) ? 'year_month' : (isMinuteDate(node) ? 'minute' : 'day'),
+      accepts: '1991-11-08、1991年11月、199111 等常见写法，脚本会转换成后端要求的取值'
+    };
+  }
+  if (type === 'date_range') {
+    return { submit: 'range_object', accepts: '["2024-01-01","2024-03-31"] 或 "2024-01-01 至 2024-03-31"' };
+  }
+  if (type === 'region') {
+    const level = Number(config.areaLevel);
+    const areaLevel = Number.isInteger(level) && level >= 1 && level <= 3 ? level : 2;
+    return {
+      submit: 'area_id',
+      areaLevel,
+      requiredDepth: ['省或直辖市', '省市', '省市区县'][areaLevel - 1],
+      accepts: '地区名称或地区 id；名称必须覆盖到 requiredDepth 指定的层级'
+    };
+  }
+  if (type === 'number_unit') {
+    const units = String(config.nameUnit || '').split(',').map(item => item.trim()).filter(Boolean);
+    return { submit: 'value_unit_object', units };
+  }
+  if (['exchange_rate', 'liquidated_damages'].includes(type)) {
+    return { submit: 'option_content_object' };
+  }
+  return null;
 }
 
 function normalizeRepeatableNode(node, key) {
@@ -342,9 +386,16 @@ function contextDates(contextText = '') {
   return [...new Set(values)];
 }
 
-function dateCandidates(contextText = '') {
+// 出生年月、参保年月这类字段的正确答案在几十年前，"今天/约一个月前"是无效候选，
+// 只会诱导宿主提交一个能通过校验但完全错误的日期。这类题必须回到用户填写。
+// 注意不要用裸的“生日”，否则“事故发生日期”里的“发生日期”会被误判。
+const HISTORICAL_DATE_PATTERN = /出生|^生日|参加工作|参工|入职|参保|退休|建账|开户|结婚/;
+
+function dateCandidates(contextText = '', field = {}) {
+  const fromContext = contextDates(contextText).map(value => optionCandidate(value, value, '来自当前案情中的日期'));
+  if (HISTORICAL_DATE_PATTERN.test(String(field.label || ''))) return fromContext;
   return [
-    ...contextDates(contextText).map(value => optionCandidate(value, value, '来自当前案情中的日期')),
+    ...fromContext,
     optionCandidate(isoDateOffset(0), isoDateOffset(0), '今天'),
     optionCandidate(isoDateOffset(30), isoDateOffset(30), '约一个月前'),
     optionCandidate(isoDateOffset(90), isoDateOffset(90), '约三个月前'),
@@ -360,18 +411,11 @@ function dateRangeCandidates() {
   });
 }
 
+// 地区题的取值是地区表里的 id，"事故发生地""经常居住地"不是地区，
+// 提交上去必然匹配失败，因此只保留当前案情里真实出现过的地名。
 function regionCandidates(contextText = '') {
   const matches = String(contextText).match(/(?:北京|上海|天津|重庆)市(?:[\u4e00-\u9fa5]{1,12}(?:区|县|镇|街道))?|[\u4e00-\u9fa5]{2,8}(?:省|自治区|特别行政区)(?:[\u4e00-\u9fa5]{1,12}(?:市|自治州|地区|州|盟))?(?:[\u4e00-\u9fa5]{1,12}(?:区|县|市|旗|镇|街道))?/g) || [];
-  const candidates = matches.map(value => optionCandidate(value, value, '来自当前案情中的地区'));
-  if (candidates.length < ASK_USER_QUESTION_LIMITS.minOptions) {
-    candidates.push(
-      optionCandidate('事故发生地', '事故发生地'),
-      optionCandidate('经常居住地', '经常居住地'),
-      optionCandidate('户籍所在地', '户籍所在地'),
-      optionCandidate('实际工作地', '实际工作地')
-    );
-  }
-  return candidates;
+  return matches.map(value => optionCandidate(value, value, '来自当前案情中的地区'));
 }
 
 function textCandidates(label) {
@@ -398,7 +442,7 @@ function suggestedCandidates(field, contextText = '') {
       ? value
       : optionCandidate(value, `${value}${field.unit || (/年龄|周岁/.test(label) ? '岁' : /天数|期限|住院|误工|护理|营养|休养/.test(label) ? '天' : '')}`));
   }
-  if (sourceType === 'date') return dateCandidates(contextText);
+  if (sourceType === 'date') return dateCandidates(contextText, field);
   if (sourceType === 'date_range') return dateRangeCandidates();
   if (sourceType === 'region') return regionCandidates(contextText);
   if (sourceType === 'exchange_rate') return [1, 6.5, 7, 7.5].map(value => optionCandidate(value, String(value)));
@@ -795,20 +839,10 @@ function chooseOption(node, value, multi = false) {
   node.edit = true;
 }
 
-function coerceSimpleValue(type, value) {
-  if (['money', 'number', 'number_unit', 'exchange_rate', 'liquidated_damages'].includes(type)) {
-    if (typeof value === 'number') return value;
-    const matched = String(value).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
-    return matched ? Number(matched[0]) : value;
-  }
-  if (type === 'date') {
-    return String(value).match(/\d{4}-\d{2}-\d{2}/)?.[0] || value;
-  }
-  if (type === 'date_range') {
-    const dates = String(value).match(/\d{4}-\d{2}-\d{2}/g);
-    return dates?.length >= 2 ? dates.slice(0, 2) : value;
-  }
-  return value;
+// 取值形状由节点的 component 和 config 决定，必须带上节点本身，
+// 只看归一化后的 type 会把日期写成字符串、把数值单位写成裸数字。
+function coerceSimpleValue(node, type, value) {
+  return coerceNodeValue(node, type, value);
 }
 
 function applySimple(node, value) {
@@ -816,7 +850,7 @@ function applySimple(node, value) {
   if (type === 'single_select') chooseOption(node, value, false);
   else if (type === 'multi_select') chooseOption(node, value, true);
   else {
-    node.value = coerceSimpleValue(type, value);
+    node.value = coerceSimpleValue(node, type, value);
     node.edit = true;
   }
   if ('msg' in node) node.msg = '';

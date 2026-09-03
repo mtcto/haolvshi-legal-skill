@@ -10,8 +10,9 @@ import {
   generateQuestionReport,
   questionCatalog,
   questionResume,
-  questionSelectionInteraction,
   replyQuestion,
+  SEMANTIC_PROJECT_SELECTION_PROMPT,
+  semanticProjectSelection,
   startQuestion
 } from './question-workflow.mjs';
 import { resumeContract, reviewContract } from './contract-workflow.mjs';
@@ -133,7 +134,7 @@ async function catalog({ api, config, input }) {
   const query = queryWithCaseContext(input.query, materials);
   let candidates;
   if (['consultation', 'calculator'].includes(input.capability)) {
-    candidates = await questionCatalog(api, config, input.capability, query, input.limit);
+    candidates = await questionCatalog(api, config, input.capability);
   } else if (['complaint', 'defense'].includes(input.capability)) {
     candidates = await pleadingCatalog(api, config, input.capability, query, input.limit);
   } else {
@@ -144,12 +145,18 @@ async function catalog({ api, config, input }) {
     capability: input.capability,
     stage: 'catalog',
     prompt: candidates.length
-      ? '请仅结合当前任务内用户陈述和材料匹配项目或模板；只有存在直接、明确、唯一的依据时才能自动选择。禁止使用全局记忆、其他任务、其他线程、旧案例或示例补充 query 或选择项目。没有匹配或仍有实质歧义时必须把完整候选项交给用户，不得自动选择“不清楚”“其他”或任意默认项目。法律咨询和计算器项目要同时参考父级领域与具体项目名称。提问时必须调用兼容原生选择组件，渲染前后核对 interaction.optionManifest 的预期选项数，全部候选项须按原顺序和完整标签显示；数量不符、截断或遗漏时不得让用户作答，必须更换能完整承载的原生组件，或在原生表单/输入组件内完整列出全部编号候选项。只有确认没有任何兼容原生组件后才展示完整 textFallback。'
+      ? ['consultation', 'calculator'].includes(input.capability)
+        ? SEMANTIC_PROJECT_SELECTION_PROMPT
+        : '请仅结合当前任务内用户陈述和材料匹配项目或模板；只有存在直接、明确、唯一的依据时才能自动选择。禁止使用全局记忆、其他任务、其他线程、旧案例或示例补充 query 或选择项目。没有匹配或仍有实质歧义时必须把完整候选项交给用户，不得自动选择“不清楚”“其他”或任意默认项目。'
       : '没有找到匹配项目，请调整关键词。',
-    interaction: candidates.length && ['consultation', 'calculator'].includes(input.capability)
-      ? attachCaseContext(questionSelectionInteraction(candidates), caseContext)
-      : null,
-    data: { candidates, caseContext }
+    interaction: null,
+    data: {
+      candidates,
+      caseContext,
+      ...(['consultation', 'calculator'].includes(input.capability)
+        ? { selection: semanticProjectSelection(candidates) }
+        : {})
+    }
   };
 }
 

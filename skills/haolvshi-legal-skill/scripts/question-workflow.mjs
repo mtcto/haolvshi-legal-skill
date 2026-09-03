@@ -10,9 +10,11 @@ import {
   withInteractionRendering
 } from './interaction-normalizer.mjs';
 import { buildQuestionReportHtml, reportSummary } from './report-builder.mjs';
+import { resolveAreaAnswers } from './area-resolver.mjs';
 import {
   capabilityResultLink,
   questionReportUrl,
+  resultDelivery,
   resultGroundingPolicy
 } from './report-links.mjs';
 import {
@@ -105,6 +107,25 @@ export function rankCatalog(items, query, limit = 8) {
     .map(({ _score, ...item }) => item);
 }
 
+export const SEMANTIC_PROJECT_SELECTION_PROMPT = '请由宿主大模型只依据当前任务的用户原话和材料，结合每个候选项目的父级领域与具体项目名称进行语义打分。不得按关键词命中数量、分词结果或目录原始顺序选择。仅当最佳项目的语义置信度不低于 0.85，且比第二候选至少高 0.15 时，才可直接使用该候选的 id 作为 projectId 调用 question-start；否则不要默认选择，应把 2 至 4 个最接近且确实存在于 candidates 中的项目交给用户确认，或提出一个能区分它们的简短问题。不得把“不清楚”“其他”作为默认项。';
+
+export function semanticProjectSelection(candidates) {
+  return {
+    mode: 'host_model_semantic_scoring',
+    candidateCount: candidates.length,
+    selectedIdField: 'projectId',
+    autoSelect: {
+      minimumConfidence: 0.85,
+      minimumMargin: 0.15
+    },
+    uncertain: {
+      action: 'ask_user_to_choose',
+      maximumChoices: 4,
+      choicesMustComeFromCandidates: true
+    }
+  };
+}
+
 function normalizedProject(item, nameById) {
   const parentName = item.onlineProjectParentName
     || nameById.get(String(item.parentId || ''))
@@ -144,7 +165,10 @@ export async function questionCatalog(api, config, capability, query, limit) {
   ]));
   const normalized = source.map(item => normalizedProject(item, nameById));
   const actionable = normalized.filter(item => item.projectId && item.appOnlineId);
-  return rankCatalog(actionable.length ? actionable : normalized.filter(item => item.id), query, limit);
+  const candidates = actionable.length ? actionable : normalized.filter(item => item.id);
+  // 咨询和计算器的项目归属由宿主大模型做语义判断。这里绝不能把用户案情
+  // 退化为分词排序，否则会在候选截断前丢掉语义上正确的项目。
+  return Number.isInteger(limit) && limit >= 0 ? candidates.slice(0, limit) : candidates;
 }
 
 function questionResponse(raw, title) {
@@ -359,7 +383,9 @@ async function replyFollowUp({ api, config, store, state, input }) {
       prompt: '当前追加题属于非必填敏感信息，已保留空值并跳过。继续处理下一道追加题。'
     });
   }
-  const answers = input.answers || {};
+  const answers = input.answers
+    ? await withResolvedAreaAnswers({ api, config, nodes: [current.node], answers: input.answers })
+    : {};
   let answeredNode;
   if (input.rawAnswer) {
     const rawAnswer = structuredClone(input.rawAnswer);
@@ -431,20 +457,12 @@ export function questionSelectionInteraction(candidates, title = '请选择最�
 }
 
 async function chooseProject(api, config, input) {
-  const candidates = await questionCatalog(api, config, input.capability, input.query, 10);
+  const candidates = await questionCatalog(api, config, input.capability);
   if (input.projectId) {
     const exact = candidates.find(item => [item.id, item.projectId, item.appOnlineId, item.sourceProjectId].includes(input.projectId));
     if (exact) return { project: exact, candidates };
-    const all = await questionCatalog(api, config, input.capability, '', 500);
-    const byId = all.find(item => [item.id, item.projectId, item.appOnlineId, item.sourceProjectId].includes(input.projectId));
-    if (byId) return { project: byId, candidates: all };
     throw new SkillError('PROJECT_NOT_FOUND', '没有找到指定咨询或计算项目');
   }
-  const target = compactText(input.query);
-  const exactMatches = target
-    ? candidates.filter(item => [item.name, item.displayName].some(value => compactText(value) === target))
-    : [];
-  if (exactMatches.length === 1) return { project: exactMatches[0], candidates };
   if (candidates.length === 1) return { project: candidates[0], candidates };
   return { project: null, candidates };
 }
@@ -467,10 +485,10 @@ export async function startQuestion({ api, config, store, input }) {
     return {
       ok: true,
       capability,
-      stage: 'needs_selection',
-      prompt: '只用当前任务内用户原始问题和当前任务材料匹配唯一项目；禁止用全局记忆、其他任务、其他线程、旧案例或示例扩写 query 或补充案情。无法唯一匹配时直接渲染 interaction.native.batches 中的完整项目选项，不得自行默认选择。',
-      interaction: attachCaseContext(questionSelectionInteraction(candidates), caseContext),
-      data: { candidates, caseContext }
+      stage: 'needs_model_selection',
+      prompt: SEMANTIC_PROJECT_SELECTION_PROMPT,
+      interaction: null,
+      data: { candidates, caseContext, selection: semanticProjectSelection(candidates) }
     };
   }
 
@@ -537,6 +555,34 @@ export async function startQuestion({ api, config, store, input }) {
   };
 }
 
+
+// 地区题的取值是地区表 id。宿主给的是"云南省昆明市"这类名称时，
+// 必须先按 config.areaLevel 解析成对应层级的 id 再写进节点，
+// 否则后端会原样收到名称并报"未匹配到地区"。
+function regionNodeEntries(nodes = []) {
+  const entries = [];
+  const walk = (list, prefix = '') => {
+    (Array.isArray(list) ? list : []).forEach((node, index) => {
+      const key = `${prefix}${String(node?.id || node?.nodeId || `field-${index + 1}`)}`;
+      if (String(node?.component ?? node?.type ?? '') === '17') {
+        entries.push({ key, node, label: plainText(node?.title || node?.name || key) });
+      }
+      if (Array.isArray(node?.children) && String(node?.component ?? '') === '4') {
+        walk(node.children, `${key}.`);
+      }
+    });
+  };
+  walk(nodes);
+  return entries;
+}
+
+async function withResolvedAreaAnswers({ api, config, nodes, answers }) {
+  const entries = regionNodeEntries(nodes);
+  if (!entries.length) return answers;
+  const { answers: next } = await resolveAreaAnswers({ api, config, nodes: entries, answers });
+  return next;
+}
+
 export async function replyQuestion({ api, config, store, input }) {
   const state = await store.load(input.sessionId);
   if (!['consultation', 'calculator'].includes(state.capability)) {
@@ -549,7 +595,9 @@ export async function replyQuestion({ api, config, store, input }) {
     return replyFollowUp({ api, config, store, state, input });
   }
   const current = normalizeQuestionNodes(state.rawNodes, { form: false });
-  const answers = input.answers || {};
+  const answers = input.answers
+    ? await withResolvedAreaAnswers({ api, config, nodes: state.rawNodes, answers: input.answers })
+    : {};
   let answeredNodes = state.rawNodes;
   if (input.rawAnswer) answeredNodes = input.rawAnswer;
   else if (Object.keys(answers).length > 0) answeredNodes = applyAnswersToNodes(state.rawNodes, answers);
@@ -653,14 +701,15 @@ export async function generateQuestionReport({ api, config, store, input }) {
     capability: state.capability,
     stage: 'completed',
     sessionId: state.sessionId,
-    prompt: `报告已经生成。最终总结、结论和法律依据只能忠实使用 data.report 及 data.related 中已经写入报告的内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。展示摘要和关键结论后，只输出 links[0].markdown（${state.links[0].markdown}）；禁止调用浏览器、网页打开、预览或导航工具，报告必须由用户点击链接后自行打开。`,
+    prompt: `报告已经生成。最终总结、结论和法律依据只能忠实使用 data.report 及 data.related 中已经写入报告的内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。展示摘要和关键结论后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），并立即使用宿主可用的浏览器或导航能力打开 data.delivery.url；若宿主没有浏览器或导航能力，仍须在同一轮回复中发送该链接，不得等待用户再次索取。`,
     data: {
       recordId: state.recordId,
       summary: reportSummary(reportResponse),
       report: reportResponse,
       related,
       reportUrl,
-      reportLinkMarkdown: state.links[0].markdown
+      reportLinkMarkdown: state.links[0].markdown,
+      delivery: resultDelivery(state.links[0])
     },
     resultPolicy,
     links: state.links,
@@ -694,7 +743,7 @@ export function questionResume(state, config) {
       : state.stage === 'ready_for_report'
         ? '信息收集已经完成，可以生成报告。'
         : reportLink
-          ? `任务已经完成。最终总结只能依据已生成报告及报告内法规、案例和其他依据，不得搜索、查询或补充外部内容；只输出 links[0].markdown（${reportLink.markdown}），禁止自动打开、预览或导航到报告页面。`
+          ? `任务已经完成。最终总结只能依据已生成报告及报告内法规、案例和其他依据，不得搜索、查询或补充外部内容；当前用户可见回复必须原样包含 data.delivery.markdown（${reportLink.markdown}），并立即使用宿主可用的浏览器或导航能力打开 data.delivery.url；若宿主没有浏览器或导航能力，仍须在同一轮回复中发送该链接。`
           : '任务已经完成。',
     interaction: attachCaseContext(interaction, state.caseContext),
     data: {
@@ -703,6 +752,7 @@ export function questionResume(state, config) {
       summary: state.result ? plainText(JSON.stringify(state.result)).slice(0, 1000) : null,
       reportUrl,
       reportLinkMarkdown: reportLink?.markdown || null,
+      delivery: reportLink ? resultDelivery(reportLink) : null,
       backendRequestPending: state.stage === 'needs_follow_up',
       followUp: followUp?.interaction.followUp || null,
       caseContext: publicCaseContext(state.caseContext)
