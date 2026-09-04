@@ -283,8 +283,8 @@ test('法律咨询逐题收集并生成报告', async () => {
   assert.equal(started.interaction.evidenceScope.crossTaskMemoryAllowed, false);
   assert.equal(started.interaction.historyResolution.noMatchAction, 'present_question_to_user');
   assert.equal(started.interaction.answerPolicy.neverChooseUnknownAsDefault, true);
-  assert.match(started.prompt, /否则直接呈现 native\.batches\[0\]/);
-  assert.match(started.prompt, /不猜测、不解释、不重建选项/);
+  assert.match(started.prompt, /呈现选项时直接用 native\.batches\[0\]/);
+  assert.match(started.prompt, /按含义比对，不要求字面相同|含义一致即可，不要求字面相同/);
   assert.deepEqual(started.interaction.choices.map(choice => choice.label), ['是', '否']);
   assert.match(started.interaction.textFallback, /1\. 是/);
   const replied = await replyQuestion({ api, config, store, input: { sessionId: started.sessionId, answers: { married: '是' } } });
@@ -308,7 +308,9 @@ test('法律咨询逐题收集并生成报告', async () => {
   assert.equal(report.resultPolicy.externalSearchAllowed, false);
   assert.equal(report.resultPolicy.addAuthoritiesNotInResultAllowed, false);
   assert.match(report.prompt, /不得调用网页搜索、法律数据库检索、联网查询/);
-  assert.match(report.prompt, /立即使用宿主可用的浏览器或导航能力打开/);
+  assert.match(report.prompt, /立即用宿主内置浏览器打开/);
+  assert.match(report.prompt, /不得调起外部浏览器/);
+  assert.match(report.prompt, /禁止自行生成 HTML、Markdown、PDF 等任何报告文件/);
   assert.equal(report.downloads, undefined);
 });
 
@@ -441,8 +443,8 @@ test('多个填空字段在自动填写部分选择后按一题一题的候选�
   assert.deepEqual(partial.interaction.native.batches[0].input.questions[0].options.map(option => option.label), [
     '18岁', '30岁', '45岁', '60岁'
   ]);
-  assert.match(partial.prompt, /否则直接呈现 native\.batches\[0\]/);
-  assert.match(partial.prompt, /不猜测、不解释、不重建选项/);
+  assert.match(partial.prompt, /呈现选项时直接用 native\.batches\[0\]/);
+  assert.match(partial.prompt, /按含义比对，不要求字面相同|含义一致即可，不要求字面相同/);
   assert.equal(answerCalls.length, 1, '部分自动填写时不应提前提交后端');
 });
 
@@ -816,7 +818,9 @@ test('合同审核以 audit 返回值为最终结果，正常流程不查询详�
   assert.equal(result.resultPolicy.sourceOfTruth, 'generated_result_only');
   assert.equal(result.resultPolicy.externalLookupAllowed, false);
   assert.match(result.prompt, /不得调用网页搜索、法律数据库检索、联网查询/);
-  assert.match(result.prompt, /立即使用宿主可用的浏览器或导航能力打开/);
+  assert.match(result.prompt, /立即用宿主内置浏览器打开/);
+  assert.match(result.prompt, /不得调起外部浏览器/);
+  assert.match(result.prompt, /禁止自行生成 HTML、Markdown、PDF 等任何报告文件/);
   assert.equal(result.downloads, undefined);
   assert.equal(calls.filter(([method]) => method === 'get').length, 0);
   assert.equal(calls.filter(([, path]) => path === '/contract/audit').length, 1);

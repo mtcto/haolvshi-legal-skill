@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
 minimum_major="${HAOLVSHI_NODE_MIN_MAJOR:-${LVPIN_NODE_MIN_MAJOR:-20}}"
 release_line="${HAOLVSHI_NODE_RELEASE_LINE:-${LVPIN_NODE_RELEASE_LINE:-22}}"
 
@@ -162,14 +164,31 @@ else
   installed='true'
 fi
 
+# 宿主解压技能包时常常丢掉文件权限。等到流程中途报 Permission denied
+# 再让模型去补，会白白多出一轮排查和决策。这里在准备环境时一次补齐，
+# 补不上也不影响后续流程（脚本一律通过 sh / node 显式调用）。
+# 只有这三个是入口，其余 .mjs 是被 import 的模块，不需要执行位。
+ensure_executable() {
+  chmod +x "$script_dir/run.sh" "$script_dir/bootstrap.sh" "$script_dir/legal-skill.mjs" 2>/dev/null || true
+}
+
+# 状态目录同样提前建好，避免第一次写会话状态时才失败。
+ensure_state_dir() {
+  state_dir="${HAOLVSHI_STATE_DIR:-${LVPIN_STATE_DIR:-${TMPDIR:-/tmp}/haolvshi-legal-skill}}"
+  mkdir -p "$state_dir" 2>/dev/null || true
+  chmod 700 "$state_dir" 2>/dev/null || true
+}
+
 case "${1:---ensure}" in
   --print-node)
     printf '%s\n' "$node_bin"
     ;;
   --ensure|--check)
+    ensure_executable
+    ensure_state_dir
     version="$($node_bin --version)"
-    printf '{"ok":true,"stage":"environment_ready","installed":%s,"nodePath":"%s","nodeVersion":"%s"}\n' \
-      "$installed" "$node_bin" "$version"
+    printf '{"ok":true,"stage":"environment_ready","installed":%s,"nodePath":"%s","nodeVersion":"%s","executableFixed":true,"stateDir":"%s"}\n' \
+      "$installed" "$node_bin" "$version" "$state_dir"
     ;;
   *)
     printf '%s\n' '用法：bootstrap.sh [--ensure|--check|--print-node]' >&2

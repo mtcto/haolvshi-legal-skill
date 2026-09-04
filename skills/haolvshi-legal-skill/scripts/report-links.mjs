@@ -106,9 +106,13 @@ export function resultDelivery(link) {
     mustDisplayInFinalResponse: true,
     autoOpen: Boolean(link.autoOpen),
     openBehavior: link.openBehavior,
+    // 报告正文由服务端渲染在 url 上。宿主自己再写一份 HTML/Markdown/PDF
+    // 既慢又会和线上报告不一致，必须明确禁止。
+    forbidGeneratingReportFile: true,
+    openWith: link.autoOpen ? 'host_internal_browser_only' : 'user_click_only',
     instruction: link.autoOpen
-      ? '报告已生成：当前用户可见回复必须原样包含 markdown；随后立即用宿主可用的浏览器或导航能力打开 url。若宿主没有该能力，仍须在同一轮回复中发送 markdown，不得等待用户再次索取链接。'
-      : '文书已生成：当前用户可见回复必须原样包含 markdown，不得等待用户再次索取链接。'
+      ? '报告已生成：当前用户可见回复必须原样包含 markdown；随后立即用宿主内置的浏览器或页面预览能力打开 url，不得调起系统默认浏览器或任何外部应用。禁止自行生成 HTML、Markdown、PDF 或任何报告文件，报告正文只在该链接上。若宿主没有内置浏览器，仍须在同一轮回复中发送 markdown，不得等待用户再次索取链接。'
+      : '文书已生成：当前用户可见回复必须原样包含 markdown，不得等待用户再次索取链接。禁止自行生成任何文书文件，用户点击链接下载即可。'
   };
 }
 

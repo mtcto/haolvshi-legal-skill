@@ -67,6 +67,7 @@ const COMPACT_INTERACTION_KEYS = [
   'step',
   'steps',
   'fields',
+  'answerPolicy',
   'submitLabel',
   'summary',
   'view',
@@ -90,16 +91,102 @@ function compactInteraction(interaction) {
   );
 }
 
+// 目录候选只有 id 和 displayName 参与宿主的语义打分与后续调用：
+// parentName、category、path 与 displayName 完全重复，alias、categories、
+// module、price、以及 projectId/appOnlineId/sourceProjectId 这几个内部编号
+// 宿主一个都用不到。全量下发会让一次咨询目录多出五万多字节的上下文，
+// 直接拖慢模型的选型判断。脚本内部仍持有完整记录用于匹配 projectId。
+function slimCandidate(candidate) {
+  if (!candidate || typeof candidate !== 'object') return candidate;
+  const displayName = candidate.displayName || candidate.name;
+  return {
+    id: candidate.id,
+    ...(displayName ? { displayName } : {}),
+    ...(candidate.alias ? { alias: candidate.alias } : {})
+  };
+}
+
+// 同一份证据边界声明在一个响应里出现三次：顶层 evidencePolicy、
+// interaction.evidenceScope，以及 interaction.caseContext.evidencePolicy。
+// 三者逐字段相同（只差 sessionId）。宿主机读的是那些布尔标志，
+// 两个长字符串数组保留顶层那一份即可，每轮可省约 1.5KB，
+// 且不削弱任何证据边界保证——完整声明仍在同一个响应里。
+function dropDuplicatedSources(scope) {
+  if (!scope || typeof scope !== 'object') return scope;
+  const { allowedSources, forbiddenSources, ...rest } = scope;
+  if (allowedSources === undefined && forbiddenSources === undefined) return scope;
+  return { ...rest, sameAs: 'evidencePolicy' };
+}
+
+function dedupeCaseContext(caseContext) {
+  if (!caseContext?.evidencePolicy) return caseContext;
+  return { ...caseContext, evidencePolicy: dropDuplicatedSources(caseContext.evidencePolicy) };
+}
+
+function dedupeEvidenceScope(interaction, evidencePolicy) {
+  if (!interaction || !evidencePolicy?.forbiddenSources) return interaction;
+  const next = { ...interaction };
+  if (next.evidenceScope) next.evidenceScope = dropDuplicatedSources(next.evidenceScope);
+  if (next.caseContext) next.caseContext = dedupeCaseContext(next.caseContext);
+  return next;
+}
+
+// 同一道题的选项文字在一个响应里出现四次：fields、native.batches、
+// optionManifest 和 textFallback。其中 optionManifest 每个选项还把
+// answer 和 label 存了两份相同的字符串，空的 description 也会逐个占位。
+// 这里只去掉对象内的重复与空占位，不动任何一种表述本身，
+// 宿主的渲染、编号核对和取值提交都不受影响。
+function compactOption(option) {
+  if (!option || typeof option !== 'object') return option;
+  const next = { ...option };
+  if (next.answer !== undefined && next.answer === next.label) delete next.answer;
+  if (next.description === '') delete next.description;
+  if (next.hasFollowUp === false) delete next.hasFollowUp;
+  if (next.followUpCount === 0) delete next.followUpCount;
+  return next;
+}
+
+function compactOptionLists(interaction) {
+  if (!interaction || typeof interaction !== 'object') return interaction;
+  const next = { ...interaction };
+  if (Array.isArray(next.fields)) {
+    next.fields = next.fields.map(field => Array.isArray(field?.options) && field.options.length
+      ? { ...field, options: field.options.map(compactOption) }
+      : field);
+  }
+  if (Array.isArray(next.optionManifest)) {
+    next.optionManifest = next.optionManifest.map(manifest => Array.isArray(manifest?.options)
+      ? { ...manifest, options: manifest.options.map(compactOption) }
+      : manifest);
+  }
+  return next;
+}
+
+function compactCandidates(data) {
+  if (!data || !Array.isArray(data.candidates)) return data;
+  return { ...data, candidates: data.candidates.map(slimCandidate) };
+}
+
 function compactResult(result, input) {
-  if (!result?.interaction || input.verbose === true) return result;
-  const interaction = compactInteraction(result.interaction);
-  const data = result.data && interaction.caseContext && result.data.caseContext
-    ? (() => {
-        const { caseContext, ...rest } = result.data;
-        return rest;
-      })()
-    : result.data;
-  return { ...result, interaction, ...(data ? { data } : {}) };
+  if (input.verbose === true) return result;
+  const interaction = result?.interaction
+    ? compactOptionLists(dedupeEvidenceScope(compactInteraction(result.interaction), result.evidencePolicy))
+    : result?.interaction;
+  let data = result?.data;
+  if (data && interaction?.caseContext && data.caseContext) {
+    const { caseContext, ...rest } = data;
+    data = rest;
+  }
+  data = compactCandidates(data);
+  if (data?.caseContext && result?.evidencePolicy?.forbiddenSources) {
+    data = { ...data, caseContext: dedupeCaseContext(data.caseContext) };
+  }
+  if (data === result?.data && interaction === result?.interaction) return result;
+  return {
+    ...result,
+    ...(interaction !== undefined ? { interaction } : {}),
+    ...(data ? { data } : {})
+  };
 }
 
 async function readInput(argv) {

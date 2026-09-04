@@ -134,7 +134,7 @@ test('概括性交通事故问题不会由脚本注入旧案例参数', async ()
   for (const marker of oldCaseMarkers) {
     assert.doesNotMatch(result.data.caseContext.text, new RegExp(marker));
   }
-  assert.match(result.prompt, /不猜测、不解释、不重建选项/);
+  assert.match(result.prompt, /按含义比对，不要求字面相同|含义一致即可，不要求字面相同/);
   assert.equal(result.interaction.evidenceScope.crossTaskMemoryAllowed, false);
   assert.equal(result.interaction.fields[0].key, 'accidentRegion');
 });

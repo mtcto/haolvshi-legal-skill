@@ -1,6 +1,7 @@
 import { SkillError } from './errors.mjs';
 import {
   applyAnswersToNodes,
+  SEMANTIC_ANSWER_PROMPT,
   nextUnresolvedInteraction,
   normalizeQuestionNodes,
   onlyAutoSkippableFieldsRemain,
@@ -35,9 +36,9 @@ const CAPABILITY_TYPE = {
   calculator: 1
 };
 
-const QUESTION_INTERACTION_PROMPT = '只处理 interaction.fields[0]：当前任务有唯一答案就调用 question-reply；否则直接呈现 native.batches[0]，不猜测、不解释、不重建选项。脚本会处理格式、追加题和多填题。';
+const QUESTION_INTERACTION_PROMPT = `只处理 interaction.fields[0]。${SEMANTIC_ANSWER_PROMPT} 呈现选项时直接用 native.batches[0]，不解释、不重建选项。脚本会处理格式、追加题和多填题。`;
 
-const FOLLOW_UP_INTERACTION_PROMPT = '只处理当前追加题：有唯一当前任务答案就提交，否则呈现 native.batches[0]；全部追加题完成前不要请求下一题。';
+const FOLLOW_UP_INTERACTION_PROMPT = `只处理当前追加题。${SEMANTIC_ANSWER_PROMPT} 全部追加题完成前不要请求下一题。`;
 
 function questionInteractionPrompt() {
   return QUESTION_INTERACTION_PROMPT;
@@ -701,7 +702,7 @@ export async function generateQuestionReport({ api, config, store, input }) {
     capability: state.capability,
     stage: 'completed',
     sessionId: state.sessionId,
-    prompt: `报告已经生成。最终总结、结论和法律依据只能忠实使用 data.report 及 data.related 中已经写入报告的内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。展示摘要和关键结论后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），并立即使用宿主可用的浏览器或导航能力打开 data.delivery.url；若宿主没有浏览器或导航能力，仍须在同一轮回复中发送该链接，不得等待用户再次索取。`,
+    prompt: `报告已经生成。最终总结、结论和法律依据只能忠实使用 data.report 及 data.related 中已经写入报告的内容；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充报告中没有的法规、案例或观点。展示摘要和关键结论后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），并立即用宿主内置浏览器打开 data.delivery.url（不得调起外部浏览器）；禁止自行生成 HTML、Markdown、PDF 等任何报告文件；若宿主没有内置浏览器，仍须在同一轮回复中发送该链接，不得等待用户再次索取。`,
     data: {
       recordId: state.recordId,
       summary: reportSummary(reportResponse),
@@ -743,7 +744,7 @@ export function questionResume(state, config) {
       : state.stage === 'ready_for_report'
         ? '信息收集已经完成，可以生成报告。'
         : reportLink
-          ? `任务已经完成。最终总结只能依据已生成报告及报告内法规、案例和其他依据，不得搜索、查询或补充外部内容；当前用户可见回复必须原样包含 data.delivery.markdown（${reportLink.markdown}），并立即使用宿主可用的浏览器或导航能力打开 data.delivery.url；若宿主没有浏览器或导航能力，仍须在同一轮回复中发送该链接。`
+          ? `任务已经完成。最终总结只能依据已生成报告及报告内法规、案例和其他依据，不得搜索、查询或补充外部内容；当前用户可见回复必须原样包含 data.delivery.markdown（${reportLink.markdown}），并立即用宿主内置浏览器打开 data.delivery.url（不得调起外部浏览器）；禁止自行生成任何报告文件；若宿主没有内置浏览器，仍须在同一轮回复中发送该链接。`
           : '任务已经完成。',
     interaction: attachCaseContext(interaction, state.caseContext),
     data: {

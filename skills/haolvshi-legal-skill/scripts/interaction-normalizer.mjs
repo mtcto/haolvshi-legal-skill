@@ -582,12 +582,41 @@ function withResponsePolicy(field) {
   };
 }
 
+// 案情里已经说清楚的题目，应该由宿主大模型做语义判断后直接作答，
+// 而不是回头再问用户一遍。这与项目选型用的是同一套范式：脚本只声明
+// 判定门槛和边界，语义理解交给模型。
+//
+// 之所以不在脚本里用关键词或正则去匹配：选项内容是开放的（身份、类型、
+// 时长、金额、日期、是否……），案情表达更是千变万化（"老板"对"用人单位"、
+// "钱是我借给他的"对"债权人"）。规则只能覆盖少数固定形态，覆盖不到的
+// 静默漏掉，覆盖错的静默填错，两种都比交回用户更糟。
+export const SEMANTIC_ANSWER_PROMPT = '先按 answerPolicy 做语义判断：把选项与当前案情逐一比对，含义一致即可，不要求字面相同（"拖欠5年"即"超过三年"，"老板"即"用人单位"）。达到 autoAnswer 门槛就直接用该选项 value 调用 question-reply，多选题提交全部成立项；依据不足或多项都可能成立才交给用户，不猜测，不选兜底项。';
+
+function semanticAnswerPolicy() {
+  return {
+    matchingMode: 'host_model_semantic_answering',
+    basis: 'current_task_case_text_and_confirmed_answers',
+    matching: 'meaning_not_literal',
+    autoAnswer: {
+      minimumConfidence: 0.85,
+      requireClearlyBestOption: true,
+      multiSelectSubmitsAllSupportedOptions: true
+    },
+    uncertain: {
+      action: 'ask_user_to_choose',
+      neverGuess: true,
+      neverDefaultToCatchAllOption: true
+    }
+  };
+}
+
 export function withInteractionRendering(interaction, options = {}) {
   if (!interaction) return null;
+  const caseText = options.suggestionContext || interaction.caseContext?.text || '';
   const fields = Array.isArray(interaction.fields)
     ? interaction.fields
         .map(withResponsePolicy)
-        .map(field => materializeSuggestedChoice(field, options.suggestionContext || interaction.caseContext?.text || ''))
+        .map(field => materializeSuggestedChoice(field, caseText))
     : [];
   const primary = fields.length === 1 ? fields[0] : null;
   const renderPlan = buildRenderPlan(fields);
@@ -736,6 +765,9 @@ export function withInteractionRendering(interaction, options = {}) {
     answerPolicy: {
       mode: 'evidence_or_user_input_only',
       evidenceScope: 'current_task_only',
+      // 判断依据是语义而非字面：案情说"老板"、选项写"用人单位"，
+      // 说"拖欠5年"、选项写"超过三年"，都算命中。
+      ...semanticAnswerPolicy(),
       onExactCurrentTaskEvidenceMatch: 'submit_matching_answer',
       onNoCurrentTaskEvidenceMatch: 'render_complete_question_and_wait_for_user',
       onConflictOrAmbiguity: 'render_complete_question_and_wait_for_user',

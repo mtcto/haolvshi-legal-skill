@@ -22,7 +22,6 @@ import {
   createFileFormData,
   validatePleadingImage
 } from './multipart.mjs';
-import { rankCatalog } from './question-workflow.mjs';
 import {
   attachCaseContext,
   materialExtractionRequired,
@@ -48,11 +47,15 @@ function normalizedTemplate(item) {
   return { id: item.id, name: item.title || item.name || '', title: item.title || item.name || '' };
 }
 
-export async function pleadingCatalog(api, config, capability, query, limit = 8) {
+export async function pleadingCatalog(api, config, capability, query, limit) {
   const type = TYPE_BY_CAPABILITY[capability];
   if (!type) throw new SkillError('CAPABILITY_INVALID', '文书能力应为 complaint 或 defense');
   const items = await api.get('/indictment/list', { query: { appId: config.appId, type } });
-  return rankCatalog((items || []).map(normalizedTemplate), query, limit);
+  const templates = (items || []).map(normalizedTemplate);
+  // 和咨询、计算器同样的道理：模板名是“民事起诉状（劳动争议）”这类法律术语，
+  // 用户说的是“追讨拖欠工资”，分词打分一个都命中不了，会把目录整个过滤成空，
+  // 用户直接用不了文书功能。这里返回完整模板，由宿主大模型做语义选型。
+  return Number.isInteger(limit) && limit >= 0 ? templates.slice(0, limit) : templates;
 }
 
 function withClientIds(value) {
@@ -539,7 +542,7 @@ export async function generatePleading({ api, config, store, input }) {
     capability: state.capability,
     stage: 'completed',
     sessionId: state.sessionId,
-    prompt: `文书已经生成。最终摘要和法律依据只能忠实使用已生成文书及文书中已经列明的法规、案例和其他依据；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充文书中没有的内容。展示摘要后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），不得等待用户再次索取。`,
+    prompt: `文书已经生成。最终摘要和法律依据只能忠实使用已生成文书及文书中已经列明的法规、案例和其他依据；不得调用网页搜索、法律数据库检索、联网查询或其他外部查询工具，不得补充文书中没有的内容。展示摘要后，当前用户可见回复必须原样包含 data.delivery.markdown（${state.links[0].markdown}），不得等待用户再次索取，也不得自行生成任何文书文件。`,
     data: {
       recordId,
       template: state.template,
