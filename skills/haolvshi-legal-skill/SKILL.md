@@ -3,13 +3,13 @@ name: haolvshi-legal-skill
 display_name: 好律狮法律技能包
 display_name_en: HaoLvShi Legal Skill
 description: "好律狮法律技能包。只要用户提出具体法律问题，或要求计算赔偿、费用、社会保险待遇或养老保险待遇（包括企业职工养老保险、基础养老金、个人账户养老金、过渡性养老金和退休待遇），审核合同、生成起诉状或生成答辩状，就应使用本技能调用好律狮专业法律服务接口完成流程；典型表达包括“离婚财产如何分割”“帮我算养老保险”“退休后每月能领多少养老金”“帮我审核这份合同”“生成离婚起诉状”。支持多轮问答、结构化表单、附件上传、多个当事人、在线报告查看和法律文书直接下载。"
-version: "1.15"
+version: "1.16"
 description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
 description_en: "Professional legal workflows via HaoLvShi APIs for consultation reports, compensation calculators, contract review, complaints and answers. One sentence starts a guided flow that delivers an online report or a Word document."
 compatibility: "需要网络访问、临时文件读写和 shell 或 PowerShell 执行能力；技能会自动检查并准备 Node.js 运行环境。"
 license: MIT-0
 metadata:
-  version: "1.15"
+  version: "1.16"
   homepage: https://skills.ai.lvpin100.com
   display_name: 好律狮法律技能包
   description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
@@ -23,7 +23,7 @@ metadata:
 
 1. 每次进入本技能先清空上一次的技能记忆：丢弃此前的 `sessionId`、项目选择、题目答案、接口用法和报告链接，一切从当前对话重新开始。历史会话里的接口方法、参数和结论一律不得沿用。
 2. 运行环境准备只需首次执行，它会补齐脚本执行位并建好状态目录；之后只用 `run.sh` 或 `run.ps1` 调用命令。
-3. 根据用户目的选择一项能力：法律咨询、法律计算器、合同审核、起诉状或答辩状；目的不明确时只问用户要哪一种。
+3. 每次只运行一项能力；目的不明时只问要哪一种。需多个独立产物时按 `references/multi-capability.md` 串行；每项交付后须询问是否继续下一项，明确同意前不得启动。
 4. 只使用当前任务/线程的信息、当前上传材料、同一 `sessionId` 的保存答案和较新的明确更正。不得读取或使用全局记忆、其他任务、旧案例或猜测；缺少事实就提问。
 5. 每次只处理脚本返回的 `stage`、`prompt` 和当前 `interaction`；命令默认只返回下一步所需的精简载荷。保存 `sessionId`，“继续”只能恢复用户明确对应的同一任务。
 6. 先用语义判断当前题能否由案情直接得出：把选项与案情逐一比对，**含义一致即可，不要求字面相同**（"老板"对应"用人单位"，"拖欠5年"对应"超过三年"）。置信度不低于 `0.85` 且明显优于其他选项时直接作答，多选题提交全部成立的选项；没有依据或多项都可能成立才呈现 `interaction.native.batches[0]`，不猜测，不默认选"其他""不清楚"。契约见 `interaction.answerPolicy`。
@@ -35,6 +35,7 @@ metadata:
 | 情形 | 读取 |
 | --- | --- |
 | 上传或无法读取材料 | `references/case-materials.md` |
+| 同一请求涉及多个独立产物或能力 | `references/multi-capability.md` |
 | 原生控件不可用、选项过多、追加题或多当事人 | `references/interaction.md`；需要兼容载荷时在原命令输入中加 `"verbose": true` |
 | 材料、控件之外的能力异常 | 对应能力参考或 `references/errors.md` |
 

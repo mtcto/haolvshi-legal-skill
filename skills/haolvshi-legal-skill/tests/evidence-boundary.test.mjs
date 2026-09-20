@@ -163,3 +163,17 @@ test('五类能力文档都明确禁止跨任务记忆', async () => {
   assert.ok(skillBody.length < 3_800, '默认流程规则应保持短小，避免低能力模型重复加载长流程');
   assert.ok(contents[0].length < 5_200, 'SKILL.md 整体仍不应无限膨胀');
 });
+
+test('多个独立交付物必须逐项确认后才能启动下一流程', async () => {
+  const skillDir = path.resolve(new URL('..', import.meta.url).pathname);
+  const skill = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf8');
+  const policy = await fs.readFile(path.join(skillDir, 'references/multi-capability.md'), 'utf8');
+
+  assert.match(skill, /每项交付后须询问是否继续下一项/);
+  assert.match(skill, /明确同意前不得启动/);
+  assert.match(policy, /同一份报告能够回答的多个.*问题.*仍属于一个流程/);
+  assert.match(policy, /当前流程完成前，不为后续流程调用/);
+  assert.match(policy, /最初把多项需求写在同一条消息中.*不视为.*预先确认/);
+  assert.match(policy, /拒绝、取消、表示不需要或没有明确同意时，结束任务/);
+  assert.match(policy, /每一项都重新取得确认/);
+});
