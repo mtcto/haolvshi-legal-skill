@@ -36,9 +36,9 @@ const CAPABILITY_TYPE = {
   calculator: 1
 };
 
-const QUESTION_INTERACTION_PROMPT = `只处理 interaction.fields[0]。${SEMANTIC_ANSWER_PROMPT} 呈现选项时直接用 native.batches[0]，不解释、不重建选项。脚本会处理格式、追加题和多填题。`;
+const QUESTION_INTERACTION_PROMPT = `只处理 interaction.fields[0]。先检查该字段是否属于当前任务已经明确排除的类别：例如用户明确选择“只有存款”时，汽车、房产、股票等依赖字段均为“不适用”，保留空值并继续，不得追问数量，也不得强行填 0、1、2 或 3；只有用户没有明确排除该类别时，才按 ${SEMANTIC_ANSWER_PROMPT} 处理。呈现选项时直接用 native.batches[0]，不解释、不重建选项。脚本会处理格式、条件字段、追加题和多填题。`;
 
-const FOLLOW_UP_INTERACTION_PROMPT = `只处理当前追加题。${SEMANTIC_ANSWER_PROMPT} 全部追加题完成前不要请求下一题。`;
+const FOLLOW_UP_INTERACTION_PROMPT = `只处理当前追加题。先检查该追加题所属类别是否已被当前任务明确排除；明确不适用时保留空值并继续，不得强行填默认数量。其余情况${SEMANTIC_ANSWER_PROMPT} 全部追加题完成前不要请求下一题。`;
 
 function questionInteractionPrompt() {
   return QUESTION_INTERACTION_PROMPT;
@@ -52,11 +52,48 @@ function nextQuestionInteraction(interaction) {
     const empty = field.value === undefined
       || field.value === null
       || (typeof field.value === 'string' && field.value.trim() === '');
-    return !(empty && (field.displayOnly || field.skipIfOptionalSensitive));
+    return !(empty && (field.notApplicable || field.displayOnly || field.skipIfOptionalSensitive));
   });
   return visibleFields.length
     ? withInteractionRendering({ ...interaction, fields: visibleFields })
     : null;
+}
+
+function nodeAnswerSummary(nodes = []) {
+  const summaries = [];
+  const walk = list => {
+    (Array.isArray(list) ? list : []).forEach(node => {
+      const title = plainText(node?.title || node?.name || node?.label || '');
+      const children = Array.isArray(node?.children) ? node.children : [];
+      const selected = children
+        .filter(option => option?.value === true || option?.selected === true || option?.checked === true)
+        .map(option => plainText(option?.title || option?.name || option?.label || option?.value || ''))
+        .filter(Boolean);
+      const rawValue = Array.isArray(node?.value) ? node.value.filter(value => value !== '') : node?.value;
+      if (title && selected.length) summaries.push(`${title}=${selected.join('、')}`);
+      else if (title && rawValue !== undefined && rawValue !== null && rawValue !== '') {
+        summaries.push(`${title}=${Array.isArray(rawValue) ? rawValue.join('、') : rawValue}`);
+      }
+      children.forEach(option => walk(option?.add));
+      walk(node?.add);
+    });
+  };
+  walk(nodes);
+  return [...new Set(summaries)].slice(-20);
+}
+
+function rememberAnsweredNodes(state, nodes) {
+  const next = nodeAnswerSummary(nodes);
+  if (!next.length) return;
+  state.answerHistory = [...new Set([...(state.answerHistory || []), ...next])].slice(-50);
+}
+
+function questionContext(state, extra = []) {
+  return [
+    state?.caseContext?.text,
+    ...(state?.answerHistory || []),
+    ...nodeAnswerSummary(extra)
+  ].filter(Boolean).join('\n');
 }
 
 function compactText(value) {
@@ -172,7 +209,7 @@ export async function questionCatalog(api, config, capability, query, limit) {
   return Number.isInteger(limit) && limit >= 0 ? candidates.slice(0, limit) : candidates;
 }
 
-function questionResponse(raw, title) {
+function questionResponse(raw, title, suggestionContext = '') {
   const parsed = parseMaybeJson(raw) || {};
   const nodes = parsed.node || parsed.answer || [];
   const normalizedNodes = Array.isArray(nodes) ? nodes : nodes ? [nodes] : [];
@@ -184,7 +221,8 @@ function questionResponse(raw, title) {
     interaction: finished ? null : normalizeQuestionNodes(nodes, {
         form: false,
         title,
-        description: parsed.msg || parsed.remark || ''
+        description: parsed.msg || parsed.remark || '',
+        suggestionContext
       })
   };
 }
@@ -251,7 +289,8 @@ function followUpInteraction(state) {
   const normalized = normalizeQuestionNodes([node], {
     form: false,
     title: plainText(node?.title || '请回答追加题'),
-    description: context
+    description: context,
+    suggestionContext: questionContext(state, [node])
   });
   // 一般追加题只暴露下一个未回答字段；若整题只剩可自动跳过的敏感字段，
   // 则保留完整标准化结果，供 continueFollowUpQueue 识别并直接跳过。
@@ -294,6 +333,7 @@ function followUpResult(state, prompt) {
 }
 
 async function submitQuestionAnswer({ api, config, store, state, answeredNodes }) {
+  rememberAnsweredNodes(state, answeredNodes);
   const identity = await store.identity();
   const raw = await api.post('/question/answer', {
     action: 2,
@@ -302,7 +342,11 @@ async function submitQuestionAnswer({ api, config, store, state, answeredNodes }
     appId: config.appId,
     deviceType: config.deviceType
   }, { userId: identity.userId, unwrap: false });
-  const response = questionResponse(raw, state.project.displayName || state.project.name);
+  const response = questionResponse(
+    raw,
+    state.project.displayName || state.project.name,
+    questionContext(state)
+  );
   state.rawNodes = response.nodes;
   state.lastResponse = response.parsed;
   state.stage = response.finished ? 'ready_for_report' : 'collecting';
@@ -333,7 +377,10 @@ async function submitQuestionAnswerAndAdvance({ api, config, store, state, answe
   let result = await submitQuestionAnswer({ api, config, store, state, answeredNodes });
   let attempts = 0;
   while (state.stage === 'collecting' && attempts < 50) {
-    const pending = normalizeQuestionNodes(state.rawNodes, { form: false });
+    const pending = normalizeQuestionNodes(state.rawNodes, {
+      form: false,
+      suggestionContext: questionContext(state)
+    });
     if (!onlyAutoSkippableFieldsRemain(pending)) break;
     attempts += 1;
     result = await submitQuestionAnswer({
@@ -399,7 +446,8 @@ async function replyFollowUp({ api, config, store, state, input }) {
 
   const answeredInteraction = normalizeQuestionNodes([answeredNode], {
     form: false,
-    title: plainText(answeredNode?.title || '请回答追加题')
+    title: plainText(answeredNode?.title || '请回答追加题'),
+    suggestionContext: questionContext(state, [answeredNode])
   });
   const unanswered = unansweredFields(answeredInteraction);
   const missing = unanswered.map(field => field.label);
@@ -515,7 +563,7 @@ export async function startQuestion({ api, config, store, input }) {
     appId: config.appId,
     deviceType: config.deviceType
   }, { userId: identity.userId, unwrap: false });
-  const response = questionResponse(raw, project.displayName || project.name);
+  const response = questionResponse(raw, project.displayName || project.name, caseContext.text);
   const state = await store.create({
     capability,
     stage: response.finished ? 'ready_for_report' : 'collecting',
@@ -524,7 +572,8 @@ export async function startQuestion({ api, config, store, input }) {
     recordId,
     rawNodes: response.nodes,
     lastResponse: response.parsed,
-    caseContext
+    caseContext,
+    answerHistory: []
   });
 
   if (onlyAutoSkippableFieldsRemain(response.interaction)) {
@@ -595,7 +644,10 @@ export async function replyQuestion({ api, config, store, input }) {
   if (state.stage === 'needs_follow_up') {
     return replyFollowUp({ api, config, store, state, input });
   }
-  const current = normalizeQuestionNodes(state.rawNodes, { form: false });
+  const current = normalizeQuestionNodes(state.rawNodes, {
+    form: false,
+    suggestionContext: questionContext(state)
+  });
   const answers = input.answers
     ? await withResolvedAreaAnswers({ api, config, nodes: state.rawNodes, answers: input.answers })
     : {};
@@ -605,7 +657,11 @@ export async function replyQuestion({ api, config, store, input }) {
   else {
     throw new SkillError('QUESTION_ANSWER_REQUIRED', '请提供当前问题的答案');
   }
-  const answeredInteraction = normalizeQuestionNodes(answeredNodes, { form: false });
+  rememberAnsweredNodes(state, answeredNodes);
+  const answeredInteraction = normalizeQuestionNodes(answeredNodes, {
+    form: false,
+    suggestionContext: questionContext(state)
+  });
 
   const unanswered = unansweredFields(answeredInteraction);
   const missing = unanswered.map(field => field.label);
@@ -724,7 +780,8 @@ export function questionResume(state, config) {
   const interaction = followUp?.interaction || (regularQuestion
     ? nextQuestionInteraction(normalizeQuestionNodes(state.rawNodes, {
         form: false,
-        title: state.project?.name
+        title: state.project?.name,
+        suggestionContext: questionContext(state)
       }))
     : null);
   const reportUrl = state.reportUrl || (state.stage === 'completed' && state.recordId

@@ -57,6 +57,20 @@ const PHONE_PATTERN = /电话|手机号|手机号码|联系电话|联系手机|�
 const IDENTITY_NUMBER_PATTERN = /身份证|公民身份号码|身份号码|证件号码|证件号|(?:^|[^a-z])(idcard|identitynumber|identityno)(?:$|[^a-z])/i;
 const PROTECTED_REGION_PATTERN = /居住(?:地|地址)|实际(?:居住地|住址)|现(?:居住地|住址)|户籍(?:地|地址)|户口(?:所在地|地址)|住所(?:地|地址)|常住(?:地|地址)|经常居住地|身份证(?:上的)?登记地址|registeredaddress|residentialaddress|domicile/i;
 
+// 这类题通常由后端按“所有可能类别”展开，但用户只选择了其中一类。
+// 不能把“没有提到”当成否定；只有当前任务明确排除某类别时，才允许把依赖该类别的字段标记为不适用。
+const CONDITIONAL_CATEGORY_PATTERNS = Object.freeze([
+  { key: 'vehicle', field: /车辆|辆车|汽车|机动车|摩托车|电动车|车牌|购车|车辆数量|汽车数量/i, category: /车辆|辆车|汽车|机动车|摩托车|电动车|车牌|购车/i },
+  { key: 'real_estate', field: /房产|房屋|住宅|不动产|门面|土地|房产数量/i, category: /房产|房屋|住宅|不动产|门面|土地/i },
+  { key: 'deposit', field: /存款|银行存款|现金|账户余额|存款金额/i, category: /存款|银行存款|现金|账户余额/i },
+  { key: 'securities', field: /股票|基金|证券|理财|债券/i, category: /股票|基金|证券|理财|债券/i },
+  { key: 'equity', field: /股权|股份|公司出资|企业/i, category: /股权|股份|公司出资|企业/i },
+  { key: 'insurance', field: /保险|保单|保险现金价值/i, category: /保险|保单/i }
+]);
+
+const EXPLICIT_NON_APPLICABLE_PATTERN = /(?:没有|无|不存在|未涉及|不涉及|不含|排除|没有任何|没有提到|并无|不属于)/;
+const EXPLICIT_ONLY_CATEGORY_PATTERN = /(?:只有|仅有|只涉及|仅涉及|选择(?:了|的)?(?:是|为)?|争议(?:财产)?类型\s*(?:是|为|=|：|:)?|财产类型\s*(?:是|为|=|：|:)?)\s*([^。；;\n]+)/;
+
 export function decodeHtml(value = '') {
   return String(value)
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
@@ -147,13 +161,63 @@ function isSensitiveField(label, key) {
     || IDENTITY_NUMBER_PATTERN.test(text);
 }
 
-function normalizeSimpleNode(node, key) {
+function conditionalCategoryForField(label, key) {
+  const text = fieldSearchText(label, key);
+  return CONDITIONAL_CATEGORY_PATTERNS.find(item => item.field.test(text)) || null;
+}
+
+function hasExplicitCategoryExclusion(contextText, categoryPattern) {
+  const text = plainText(contextText);
+  if (!text || !categoryPattern) return false;
+  // “没有汽车/不涉及车辆”是直接证据；只检查类别附近的窗口，避免把别的事实误判为排除。
+  const categoryRegex = new RegExp(
+    categoryPattern.source,
+    categoryPattern.flags.includes('g') ? categoryPattern.flags : `${categoryPattern.flags}g`
+  );
+  const categoryMatches = [...text.matchAll(categoryRegex)];
+  if (categoryMatches.some(match => {
+    const start = Math.max(0, (match.index || 0) - 18);
+    const end = Math.min(text.length, (match.index || 0) + String(match[0]).length + 18);
+    return EXPLICIT_NON_APPLICABLE_PATTERN.test(text.slice(start, end));
+  })) return true;
+
+  // “只有存款/争议财产类型=存款”这类表述明确限定了类别集合。
+  const onlyMatch = text.match(EXPLICIT_ONLY_CATEGORY_PATTERN);
+  if (!onlyMatch) return false;
+  const selected = onlyMatch[1] || '';
+  const selectedCategories = CONDITIONAL_CATEGORY_PATTERNS
+    .filter(item => item.category.test(selected))
+    .map(item => item.key);
+  const current = CONDITIONAL_CATEGORY_PATTERNS.find(item => item.category === categoryPattern);
+  return selectedCategories.length > 0 && Boolean(current) && !selectedCategories.includes(current.key);
+}
+
+function fieldApplicability(node, label, key, contextText = '') {
+  const config = node?.config || {};
+  const explicitConfig = node?.notApplicable === true
+    || config.notApplicable === true
+    || config.applicable === false
+    || config.isApplicable === false;
+  const category = conditionalCategoryForField(label, key);
+  const explicitContext = category && hasExplicitCategoryExclusion(contextText, category.category);
+  if (!explicitConfig && !explicitContext) return null;
+  return {
+    status: 'not_applicable',
+    reason: explicitConfig ? 'backend_explicit_non_applicable' : 'current_task_explicit_category_exclusion',
+    category: category?.key || null,
+    evidenceRequired: true
+  };
+}
+
+function normalizeSimpleNode(node, key, options = {}) {
   const type = fieldType(node);
   const readonly = Boolean(node?.readyOnly || node?.readonly);
   const backendRequired = fieldRequired(node);
   const label = plainText(node?.title || node?.name || node?.label || key);
   const sensitive = isSensitiveField(label, key);
   const skipIfOptionalSensitive = !backendRequired && !readonly && sensitive;
+  const applicability = fieldApplicability(node, label, key, options.suggestionContext || '');
+  const notApplicable = Boolean(applicability);
   // 姓名等仅用于报告展示的可选字段没有可凭空生成的合法候选值。
   // 所有非必填敏感字段都不应阻塞流程；姓名继续保留 displayOnly 兼容标记。
   const displayOnly = skipIfOptionalSensitive && type === 'text' && isPersonNameField(label, key);
@@ -163,10 +227,13 @@ function normalizeSimpleNode(node, key) {
     type,
     required: backendRequired,
     backendRequired,
-    responseRequired: !readonly && !skipIfOptionalSensitive,
+    responseRequired: !readonly && !skipIfOptionalSensitive && !notApplicable,
     displayOnly,
     sensitive,
     skipIfOptionalSensitive,
+    notApplicable,
+    applicability,
+    skipReason: applicability?.reason || null,
     value: node?.value ?? '',
     options: ['single_select', 'multi_select'].includes(type) ? normalizeOptions(node) : [],
     unit: node?.config?.unit || node?.unit || '',
@@ -213,7 +280,7 @@ function valueContract(node, type) {
   return null;
 }
 
-function normalizeRepeatableNode(node, key) {
+function normalizeRepeatableNode(node, key, options = {}) {
   const readonly = Boolean(node?.readyOnly || node?.readonly);
   const children = Array.isArray(node.children) ? node.children : [];
   const rowCount = Math.max(
@@ -221,7 +288,7 @@ function normalizeRepeatableNode(node, key) {
     ...children.map(child => Array.isArray(child.value) ? child.value.length : 0)
   );
   const fields = children.map((child, index) => ({
-    ...normalizeSimpleNode(child, nodeKey(child, `${key}-field-${index + 1}`)),
+    ...normalizeSimpleNode(child, nodeKey(child, `${key}-field-${index + 1}`), options),
     // 重复记录中的姓名是当事人/记录的实际内容，不能按报告展示字段跳过。
     displayOnly: false,
     skipIfOptionalSensitive: false
@@ -505,7 +572,11 @@ function autoSkipUnit(field, order) {
     fieldKey: field.key,
     type: field.type,
     mode: 'skip',
-    reason: field.displayOnly ? 'optional_display_only' : 'optional_sensitive',
+    reason: field.notApplicable
+      ? 'explicit_non_applicable'
+      : field.displayOnly
+        ? 'optional_display_only'
+        : 'optional_sensitive',
     label: field.label
   };
 }
@@ -527,7 +598,7 @@ function buildRenderPlan(fields) {
     input: { questions: batch.map(nativeQuestionForField) }
   }));
   const nativeFieldKeys = new Set(nativeFields.map(field => field.key));
-  const units = fields.map((field, index) => (field.displayOnly || field.skipIfOptionalSensitive) && isEmptyAnswer(field.value)
+  const units = fields.map((field, index) => (field.notApplicable || field.displayOnly || field.skipIfOptionalSensitive) && isEmptyAnswer(field.value)
     ? autoSkipUnit(field, index + 1)
     : nativeFieldKeys.has(field.key)
     ? {
@@ -717,6 +788,8 @@ export function withInteractionRendering(interaction, options = {}) {
       suggestedChoicesUseStandardSingleSelect: true,
       suggestedChoicesMustUseHostOtherInput: true,
       optionalDisplayOnlyFieldsMayBeSkipped: true,
+      explicitlyNonApplicableFieldsMayBeSkipped: true,
+      nonApplicableEvidenceMustBeExplicit: true,
       optionalSensitiveFieldsMayBeSkipped: true,
       optionalSensitiveFieldsRemainBlank: true,
       protectedRegionFieldsMustNotBeAutoSkipped: true,
@@ -757,6 +830,8 @@ export function withInteractionRendering(interaction, options = {}) {
       optionalDisplayOnlyRule: 'empty_name_used_only_for_report_display_is_not_a_blocking_question',
       optionalSensitiveAutoSkip: true,
       optionalSensitiveRule: 'empty_non_required_name_phone_or_identity_number_is_not_a_blocking_question',
+      explicitNonApplicableAutoSkip: true,
+      nonApplicableRule: 'only_current_task_explicit_category_exclusion_or_backend_flag',
       protectedRegionRule: '居住地和户籍地等地区字段即使非必填也必须保留',
       backendRequiredAffectsValidationOnly: true,
       uncertaintyLabels: ['不清楚', '不知道', '不确定', '不详', '未知', '无法判断', '无法确认', '其他'],
@@ -778,10 +853,13 @@ export function withInteractionRendering(interaction, options = {}) {
       neverChooseAnyOptionToAdvanceWorkflow: true,
       userMustChooseWhenEvidenceMissing: true,
       optionalUnmatchedAction: 'render_complete_question_and_wait_for_user',
+      explicitNonApplicableAction: 'preserve_blank_and_advance',
       allowBlankOptionalAnswer: false,
       allowAutomaticOptionalSkip: false,
       allowAutomaticOptionalSensitiveSkip: true,
       optionalSensitiveSkipOnlyWhen: 'empty_and_backend_required_is_false',
+      allowAutomaticNonApplicableSkip: true,
+      nonApplicableSkipOnlyWhen: 'explicit_current_task_exclusion_or_backend_flag',
       protectedRegionFieldsCannotBeSkipped: true,
       neverAutoSelectAiGeneratedChoice: true,
       aiGeneratedChoiceRequiresExplicitUserConfirmation: true,
@@ -827,12 +905,12 @@ export function normalizeQuestionNodes(nodes = [], options = {}) {
     if (type === 'field_group') {
       const children = Array.isArray(node.children) ? node.children : [];
       children.forEach((child, childIndex) => {
-        fields.push(normalizeSimpleNode(child, `${key}.${nodeKey(child, childIndex + 1)}`));
+        fields.push(normalizeSimpleNode(child, `${key}.${nodeKey(child, childIndex + 1)}`, options));
       });
     } else if (type === 'repeatable_group') {
-      fields.push(normalizeRepeatableNode(node, key));
+      fields.push(normalizeRepeatableNode(node, key, options));
     } else {
-      fields.push(normalizeSimpleNode(node, key));
+      fields.push(normalizeSimpleNode(node, key, options));
     }
   });
 
@@ -931,9 +1009,10 @@ export function applyAnswersToNodes(nodes = [], answers = {}) {
 export function missingRequiredFields(interaction) {
   const missing = [];
   for (const field of interaction?.fields || []) {
+    if (field.notApplicable) continue;
     if (field.type === 'repeatable_group') {
       field.rows.forEach((row, index) => {
-        field.fields.filter(item => item.required).forEach(item => {
+        field.fields.filter(item => item.required && !item.notApplicable).forEach(item => {
           if (row[item.key] === undefined || row[item.key] === null || row[item.key] === '') {
             missing.push(`${field.label}${index + 1}：${item.label}`);
           }
@@ -952,6 +1031,7 @@ export function unresolvedInteraction(interaction) {
   if (!unresolved.length) return null;
   const unresolvedKeys = new Set(unresolved.map(field => field.key));
   const visibleFields = (interaction.fields || []).filter(field => {
+    if (field.notApplicable && isEmptyAnswer(field.value)) return false;
     if (field.displayOnly && isEmptyAnswer(field.value)) return false;
     if (field.skipIfOptionalSensitive && isEmptyAnswer(field.value)) return false;
     if (field.type === 'repeatable_group') {
@@ -991,11 +1071,12 @@ export function unansweredFields(interaction) {
   const unanswered = [];
   for (const field of interaction?.fields || []) {
     if (field.readonly) continue;
+    if (field.notApplicable && isEmptyAnswer(field.value)) continue;
     if (field.displayOnly && isEmptyAnswer(field.value)) continue;
     if (field.skipIfOptionalSensitive && isEmptyAnswer(field.value)) continue;
     if (field.type === 'repeatable_group') {
       field.rows.forEach((row, index) => {
-        field.fields.filter(item => !item.readonly).forEach(item => {
+        field.fields.filter(item => !item.readonly && !(item.notApplicable && isEmptyAnswer(row[item.key]))).forEach(item => {
           if (isEmptyAnswer(row[item.key])) {
             unanswered.push({
               key: `${field.key}[${index}].${item.key}`,
@@ -1024,12 +1105,13 @@ export function onlyAutoSkippableFieldsRemain(interaction) {
   const fields = Array.isArray(interaction?.fields) ? interaction.fields : [];
   if (!fields.length || unansweredFields(interaction).length > 0) return false;
   const emptySkippable = fields.some(field =>
-    isEmptyAnswer(field.value) && (field.displayOnly || field.skipIfOptionalSensitive)
+    isEmptyAnswer(field.value) && (field.notApplicable || field.displayOnly || field.skipIfOptionalSensitive)
   );
   if (!emptySkippable) return false;
   return fields.every(field =>
     field.readonly
     || !isEmptyAnswer(field.value)
+    || field.notApplicable
     || field.displayOnly
     || field.skipIfOptionalSensitive
   );

@@ -360,6 +360,45 @@ test('非必填题没有答案时仍要求用户回答且不能留空提交', ()
   assert.match(interaction.textFallback, /后续治疗费用金额（请回答）/);
 });
 
+test('当前任务明确只有存款时，车辆数量等条件字段标记为不适用并保留空值', () => {
+  const interaction = normalizeQuestionNodes([{
+    id: 'vehicleCount',
+    title: '有几辆车存在争议',
+    component: '12',
+    config: { required: true }
+  }], {
+    suggestionContext: '争议财产类型=存款；用户选择的只有存款，其他财产都没有'
+  });
+
+  const field = interaction.fields[0];
+  assert.equal(field.notApplicable, true);
+  assert.equal(field.applicability.status, 'not_applicable');
+  assert.equal(field.applicability.category, 'vehicle');
+  assert.equal(field.responseRequired, false);
+  assert.deepEqual(unansweredFields(interaction), []);
+  assert.deepEqual(interaction.inputSchema.required, []);
+  assert.equal(interaction.renderPlan.units[0].reason, 'explicit_non_applicable');
+  assert.equal(onlyAutoSkippableFieldsRemain(interaction), true);
+  assert.deepEqual(field.value, '');
+  assert.deepEqual(field.options.map(option => option.label), ['1', '2', '3', '5']);
+  assert.equal(interaction.presentation.nonApplicableEvidenceMustBeExplicit, true);
+  assert.equal(interaction.answerPolicy.explicitNonApplicableAction, 'preserve_blank_and_advance');
+});
+
+test('仅因案情没有提到车辆不能把车辆字段误判为不适用', () => {
+  const interaction = normalizeQuestionNodes([{
+    id: 'vehicleCount',
+    title: '有几辆车存在争议',
+    component: '12',
+    config: { required: true }
+  }], { suggestionContext: '当前任务未提到车辆情况' });
+
+  assert.equal(interaction.fields[0].notApplicable, false);
+  assert.equal(interaction.fields[0].responseRequired, true);
+  assert.deepEqual(unansweredFields(interaction).map(field => field.key), ['vehicleCount']);
+  assert.equal(onlyAutoSkippableFieldsRemain(interaction), false);
+});
+
 test('超过常见组件容量的选项仍完整保留并要求逐项核对渲染数量', () => {
   const labels = ['无责任', '次要责任', '同等责任', '主要责任', '全部责任', '责任未认定', '其他责任'];
   const interaction = normalizeQuestionNodes([{

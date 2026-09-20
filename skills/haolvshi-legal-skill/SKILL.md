@@ -3,13 +3,13 @@ name: haolvshi-legal-skill
 display_name: 好律狮法律技能包
 display_name_en: HaoLvShi Legal Skill
 description: "好律狮法律技能包。只要用户提出具体法律问题，或要求计算赔偿、费用、社会保险待遇或养老保险待遇（包括企业职工养老保险、基础养老金、个人账户养老金、过渡性养老金和退休待遇），审核合同、生成起诉状或生成答辩状，就应使用本技能调用好律狮专业法律服务接口完成流程；典型表达包括“离婚财产如何分割”“帮我算养老保险”“退休后每月能领多少养老金”“帮我审核这份合同”“生成离婚起诉状”。支持多轮问答、结构化表单、附件上传、多个当事人、在线报告查看和法律文书直接下载。"
-version: "1.16"
+version: "1.17"
 description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
 description_en: "Professional legal workflows via HaoLvShi APIs for consultation reports, compensation calculators, contract review, complaints and answers. One sentence starts a guided flow that delivers an online report or a Word document."
 compatibility: "需要网络访问、临时文件读写和 shell 或 PowerShell 执行能力；技能会自动检查并准备 Node.js 运行环境。"
 license: MIT-0
 metadata:
-  version: "1.16"
+  version: "1.17"
   homepage: https://skills.ai.lvpin100.com
   display_name: 好律狮法律技能包
   description_zh: "基于好律狮法律服务接口的专业法律技能，支持法律咨询报告、赔偿与费用计算、社会保险和养老保险待遇测算、智能合同审核、起诉状生成与答辩状生成。一句话提出问题，技能会引导补充关键事实，并交付在线报告或 Word 文书。"
@@ -27,7 +27,7 @@ metadata:
 4. 只使用当前任务/线程的信息、当前上传材料、同一 `sessionId` 的保存答案和较新的明确更正。不得读取或使用全局记忆、其他任务、旧案例或猜测；缺少事实就提问。
 5. 每次只处理脚本返回的 `stage`、`prompt` 和当前 `interaction`；命令默认只返回下一步所需的精简载荷。保存 `sessionId`，“继续”只能恢复用户明确对应的同一任务。
 6. 先用语义判断当前题能否由案情直接得出：把选项与案情逐一比对，**含义一致即可，不要求字面相同**（"老板"对应"用人单位"，"拖欠5年"对应"超过三年"）。置信度不低于 `0.85` 且明显优于其他选项时直接作答，多选题提交全部成立的选项；没有依据或多项都可能成立才呈现 `interaction.native.batches[0]`，不猜测，不默认选"其他""不清楚"。契约见 `interaction.answerPolicy`。
-7. 脚本会处理建议选项、追加题、多填题、非必填敏感字段，并按字段 `valueContract` 把日期、地区转成后端取值，提交用户原话即可；地区题要问到 `areaLevel` 指定的层级。每轮只处理当前字段；地区与重复记录姓名仍需用户确认。
+7. 脚本处理建议选项、追加题、多填题、非必填敏感字段和明确排除的条件字段，并按契约转换日期、地区；不适用字段保留空值，不能填零或默认数量，单纯未提到仍需询问。地区题问到 `areaLevel`；每轮只处理当前字段，地区与重复记录姓名仍需确认。
 8. 最终摘要只能依据本次生成的报告或文书，不再搜索或补充外部法律信息。同一轮回复必须原样输出 `data.delivery.markdown`；`autoOpen=true` 时立即用宿主内置浏览器打开 `data.delivery.url`，不得调起外部浏览器。禁止自行生成 HTML、Markdown、PDF 等任何报告或文书文件。
 
 默认不读取参考文档，只有命中下表情形时才按需读取，避免每轮重复加载长规则。

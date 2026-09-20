@@ -177,6 +177,71 @@ test('启动时自动跳过非必填敏感字段并继续请求下一题', async
   assert.equal(answerCalls.length, 3);
 });
 
+test('用户已明确选择财产类别后，后续不适用的车辆数量题自动保留空值并继续', async () => {
+  const store = new MemoryStore();
+  const answerCalls = [];
+  const api = {
+    async get(path) {
+      if (path.startsWith('/app/projects/')) return [{ appOnlineId: 'cohabitation-online', projectId: 'cohabitation-project', onlineProjectName: '同居财产咨询' }];
+      if (path === '/question/project/cohabitation-online') return { pvId: 'pv-cohabitation' };
+      if (path === '/question/getRecordId/cohabitation-online') return 'record-cohabitation';
+      throw new Error(`未模拟接口：${path}`);
+    },
+    async post(path, body) {
+      assert.equal(path, '/question/answer');
+      answerCalls.push(structuredClone(body));
+      if (body.action === 1) {
+        return {
+          status: 1,
+          node: [{
+            id: 'assetType',
+            title: '争议财产类型',
+            component: '2',
+            config: { required: true },
+            children: [
+              { id: 'deposit', title: '存款' },
+              { id: 'vehicle', title: '车辆' },
+              { id: 'realEstate', title: '房产' }
+            ]
+          }]
+        };
+      }
+      if (answerCalls.length === 2) {
+        return {
+          status: 1,
+          node: [{
+            id: 'vehicleCount',
+            title: '有几辆车存在争议',
+            component: '12',
+            config: { required: true }
+          }]
+        };
+      }
+      return { status: 0, node: [] };
+    }
+  };
+
+  const started = await startQuestion({
+    api,
+    config,
+    store,
+    input: { capability: 'consultation', query: '同居期间财产分割' }
+  });
+  assert.deepEqual(started.interaction.fields.map(field => field.key), ['assetType']);
+
+  const completed = await replyQuestion({
+    api,
+    config,
+    store,
+    input: { sessionId: started.sessionId, answers: { assetType: '存款' } }
+  });
+
+  assert.equal(completed.stage, 'ready_for_report');
+  assert.equal(answerCalls.length, 3, '不适用车辆题应由脚本提交空值推进，而不是交给用户填写');
+  assert.equal(answerCalls[2].answer[0].value ?? '', '');
+  assert.equal(completed.interaction, null);
+});
+
 test('法律咨询和计算器把上传材料持续附加到每一道题的内部案情上下文', async t => {
   const materialDir = await fs.mkdtemp(path.join(os.tmpdir(), 'haolvshi-question-materials-'));
   t.after(() => fs.rm(materialDir, { recursive: true, force: true }));
