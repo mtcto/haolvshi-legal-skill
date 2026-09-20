@@ -355,7 +355,7 @@ assets/                  报告模板和技能图标
 
 所有打包产物都放在仓库根目录的 `dist/`，不要输出到 `/tmp` 等临时目录：通用包 `dist/haolvshi-legal-skill.zip`，WorkBuddy SkillHub 兼容包 `dist/haolvshi-legal-skill-workbuddy-skillhub-<版本>.zip`，开放平台专用包 `dist/haolvshi-workbuddy-open-platform-<SemVer>.zip`。
 
-发布规则以仓库根目录的 [`AGENTS.md`](../AGENTS.md) 为准。本节只给出通用包的服务器托管操作。用户要求正式发布时，还必须继续完成 GitHub、ClawHub 和 Claude；WorkBuddy 两类包只在本地生成和校验，不打开页面或上传。
+发布规则以仓库根目录的 [`AGENTS.md`](../AGENTS.md) 为准。本节只给出通用包的服务器托管操作。用户要求正式发布时，还必须继续完成 GitHub 和 ClawHub；Claude 不发布，WorkBuddy 两类包只在本地生成和校验，不打开页面或上传。
 
 ### 打包
 
@@ -392,7 +392,7 @@ rsync -av \
 
 不要使用 `--delete` 清理服务器的 `/skills/` 目录；静态文件覆盖后不需要重新加载 nginx。
 
-服务器发布只是完整发布的一部分；随后按根目录 `发布平台说明.md` 同步 GitHub 公开仓库并创建 Release、提交 ClawHub 新版本、更新 Claude。仓库层面不再重复询问发布确认。WorkBuddy 两个专用包只生成到 `dist/` 并完成内容校验。
+服务器发布只是完整发布的一部分；随后按根目录 `发布平台说明.md` 同步 GitHub 公开仓库并创建 Release、提交 ClawHub 新版本。仓库层面不再重复询问发布确认。Claude 不发布；WorkBuddy 两个专用包只生成到 `dist/` 并完成内容校验。
 
 ### 发布官网
 
